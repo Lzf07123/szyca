@@ -15,8 +15,10 @@ import {
   useRouteError,
 } from 'react-router-dom'
 import Footer from './components/Footer'
+import CosmicBackdrop from './components/CosmicBackdrop'
 import { usePageMeta } from './components/PageMeta'
 import { useSite, type SiteFeature } from './api/site'
+import { useScrollReveal } from './hooks/useScrollReveal'
 
 const Home = lazy(() => import('./pages/Home'))
 const Join = lazy(() => import('./pages/Join'))
@@ -71,6 +73,7 @@ function Layout() {
   const mainRef = useRef<HTMLElement>(null)
   const fullscreen = pathname === '/screen'
   const isHome = pathname === '/'
+  useScrollReveal(pathname)
 
   useEffect(() => {
     setMenuOpen(false)
@@ -81,6 +84,7 @@ function Layout() {
 
   return (
     <div className={`app site-shell${fullscreen ? ' fullscreen' : ''}${isHome ? ' route-home' : ''}`}>
+      <CosmicBackdrop />
       <a className="skip-link" href="#main-content">跳到主要内容</a>
       {!fullscreen && (
         <header className="topbar public-topbar">
@@ -88,7 +92,7 @@ function Layout() {
             {site.brand.logo_url ? (
               <img src={site.brand.logo_url} alt="" />
             ) : (
-              <span className="logo-mark" aria-hidden="true">CA</span>
+              <span className="logo-mark" aria-hidden="true"><span>CA</span></span>
             )}
             <span className="logo-copy">
               <b>{site.brand.name}</b>
@@ -107,13 +111,14 @@ function Layout() {
             <span className="sr-only">{menuOpen ? '关闭导航' : '打开导航'}</span>
           </button>
           <nav id="site-navigation" className={`public-nav${menuOpen ? ' open' : ''}`} aria-label="主导航">
-            {site.nav.map((item) => (
+            {site.nav.map((item, index) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 end={item.to === '/'}
                 className={({ isActive }) => (isActive ? 'active' : undefined)}
               >
+                <span className="nav-prefix" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
                 {item.label}
               </NavLink>
             ))}

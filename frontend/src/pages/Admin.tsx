@@ -4,6 +4,7 @@ import { setFavicon, useSite } from '../api/site'
 import { usePageMeta } from '../components/PageMeta'
 import AccessPanel from './admin/AccessPanel'
 import AdminLottery from './admin/AdminLottery'
+import AdminOverview from './admin/AdminOverview'
 import AuditPanel from './admin/AuditPanel'
 import MediaPanel from './admin/MediaPanel'
 import SiteEditor from './admin/SiteEditor'
@@ -576,22 +577,7 @@ export default function Admin() {
       </nav>
 
       {visibleTab === 'overview' && ov && (
-        <div className="card">
-          <h3>系统概览</h3>
-          <div className="ov-grid">
-            <div className="ov-item"><b>{ov.overview.users}</b><span>注册用户</span></div>
-            <div className="ov-item"><b>{ov.overview.participants}</b><span>参与答题</span></div>
-            <div className="ov-item"><b>{ov.overview.attempts}</b><span>累计答题</span></div>
-            <div className="ov-item"><b>{ov.overview.online}</b><span>当前在线</span></div>
-            <div className="ov-item"><b>{ov.overview.questions}</b><span>启用题目</span></div>
-            <div className="ov-item"><b>{ov.overview.backgrounds}</b><span>背景图片</span></div>
-            <div className="ov-item"><b>{ov.mem_mb} MB</b><span>内存占用</span></div>
-            <div className="ov-item"><b>{ov.goroutines}</b><span>协程数</span></div>
-            <div className="ov-item"><b>{ov.uptime}</b><span>运行时长</span></div>
-            <div className={`ov-item ${ov.overview.db === 'ok' ? 'ok' : 'bad'}`}><b>{ov.overview.db}</b><span>数据库</span></div>
-            <div className={`ov-item ${ov.overview.redis === 'ok' ? 'ok' : 'bad'}`}><b>{ov.overview.redis}</b><span>Redis</span></div>
-          </div>
-        </div>
+        <AdminOverview data={ov} quizState={qState} canReadAudit={can('audit.read')} />
       )}
 
       {visibleTab === 'site' && (

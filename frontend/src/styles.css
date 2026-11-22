@@ -94,20 +94,20 @@ body {
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-primary {
   background: var(--red);
-  border-color: #ef4444;
+  border-color: var(--accent-primary);
   color: #fff;
   text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.35);
 }
 .btn-secondary {
   background: var(--blue);
-  border-color: #3b82f6;
+  border-color: var(--accent-primary);
   color: #fff;
   text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.35);
 }
 .btn-accent {
   background: var(--green);
-  border-color: #4ade80;
-  color: #0f172a;
+  border-color: var(--success);
+  color: var(--bg-950);
   text-shadow: none;
 }
 
@@ -386,7 +386,7 @@ select {
   font-weight: 400;
   margin: 12px 0;
   color: var(--gold);
-  text-shadow: 0 0 20px rgba(251, 191, 36, 0.5), 3px 3px 0 #92400e;
+  text-shadow: 0 0 20px color-mix(in srgb, var(--warning) 50%, transparent), 3px 3px 0 var(--warning);
 }
 .rank-line { margin: 12px 0; }
 .rank-list { list-style: none; padding: 0; margin: 12px 0 0; }

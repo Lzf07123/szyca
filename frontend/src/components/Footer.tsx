@@ -9,10 +9,10 @@ export default function Footer() {
     <footer className="footer public-footer">
       <div className="footer-inner">
         <div className="footer-brand">
-          <span className="footer-mark" aria-hidden="true">CA</span>
+          <span className="footer-mark" aria-hidden="true"><span>CA</span></span>
           <div>
             <strong>{footer.owner || brand.name}</strong>
-            <p>学习 · 协作 · 创造</p>
+            <p>学习 / 协作 / 创造</p>
           </div>
         </div>
         <nav className="footer-links" aria-label="页脚导航">
@@ -39,6 +39,11 @@ export default function Footer() {
               {footer.police}
             </a>
           )}
+        </div>
+        <div className="footer-terminal">
+          <span><i aria-hidden="true">&gt;</i> connection closed</span>
+          <b>EOF — 感谢阅读到底部</b>
+          <span>NEBULA_OS / STPT</span>
         </div>
       </div>
     </footer>
