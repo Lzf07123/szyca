@@ -98,6 +98,7 @@
 | GET | `/api/me` | 个人成绩与排名 |
 | GET | `/api/rank?top=99` | 排行榜 |
 | GET | `/api/stats` | 聚合统计 |
+| GET | `/api/runtime` | 公开系统运行时长；返回 `uptime_seconds`，`Cache-Control: no-store` |
 | GET | `/ws` | 实时更新 WebSocket |
 
 答题完整性约束：
