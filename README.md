@@ -139,11 +139,22 @@ scripts/publish_image.sh --push
 backend/              Go（site/access/audit/media/lottery/quiz/platform/store/ws）
 frontend/             React 18 + Vite（官网、答题、大屏、抽奖、RBAC 后台）
 deploy/               单容器 Dockerfile + Compose + Nginx/Supervisor
-design-system/szyca/  BRAND + MASTER + 页面规则
+design-system/szyca/  BRAND + MASTER + 页面规则 + 项目自有深空模板
 docs/                 架构、API、后台、部署回滚与验收证据
 tests/browser/        Playwright + axe Docker 验收
-artifacts/browser/    六档视口、模块开/关、抽奖和后台截图
+artifacts/browser/    14 档视口、模块开/关、抽奖和后台截图
 ```
+
+## 项目设计模板
+
+`szyca` 的深空视觉独立于 `Li&Design` 子模块，模板版本、权威来源和哈希保存在 `design-system/szyca/template/manifest.json`。
+
+```bash
+python3 scripts/export_design_template.py --write
+python3 scripts/export_design_template.py --check
+```
+
+修改 `frontend/src/index.css` 或 `frontend/src/cosmos.css` 后必须重新导出模板；`--check` 会阻止快照漂移和 `Li&Design` 子模块依赖回流。
 
 ## 云端部署要点
 

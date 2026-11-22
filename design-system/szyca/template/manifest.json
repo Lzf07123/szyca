@@ -1,0 +1,40 @@
+{
+  "id": "szyca-deep-space",
+  "name": "szyca 数字深空",
+  "version": "1.0.0",
+  "ownership": "project",
+  "derivedFrom": null,
+  "sharedSubmodule": false,
+  "canonical": {
+    "brand": "design-system/szyca/BRAND.md",
+    "master": "design-system/szyca/MASTER.md",
+    "runtimeTokens": "frontend/src/index.css",
+    "runtimeComponents": "frontend/src/cosmos.css",
+    "runtimeHome": "frontend/src/pages/Home.tsx",
+    "runtimeCanvas": "frontend/src/components/CosmicBackdrop.tsx"
+  },
+  "exports": {
+    "tokensCss": "tokens.css",
+    "tokensJson": "tokens.json",
+    "componentsCss": "components.css"
+  },
+  "fonts": {
+    "sans": "Noto Sans SC Variable",
+    "display": "Space Grotesk Variable",
+    "mono": "JetBrains Mono Variable"
+  },
+  "signature": {
+    "grid": "56px",
+    "particleNodes": 90,
+    "particleLinkDistance": 110,
+    "pointerGravityDistance": 190,
+    "mobileBreakpoint": 820
+  },
+  "hashes": {
+    "tokensSource": "299de329351eada9f8247dd5954a48ebac0bfc7c581129e738aa90a233021413",
+    "componentsSource": "7d79ab173afb18d02983dda39860808cbcffcbdcc0ee13bac7cf947d7730b5fa",
+    "tokensCss": "73f3ec70f2e8a5f0869fc442f14fac124ffdf083a82597ad5c4c001a941c4de3",
+    "tokensJson": "04c83a45c84d6d8b75edddc3ee2b2446b9077b40fe1013845b3540137853edf4",
+    "componentsCss": "752559cf9ac5e73ef01589d934d9fae411e6698abb934d0655ce751459790a16"
+  }
+}

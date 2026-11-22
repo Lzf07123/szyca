@@ -11,6 +11,10 @@
 > 组件视觉层：`frontend/src/cosmos.css`
 >
 > 静态文案降级：`frontend/src/brand.ts`
+>
+> 设计治理：项目自有；不依赖 `Li&Design` 子模块
+>
+> 可复制模板：`design-system/szyca/template/`
 
 ## 品牌定位
 
