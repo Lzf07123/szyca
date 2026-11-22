@@ -21,7 +21,9 @@ ROOT = Path(__file__).resolve().parents[1]
 BASE = os.environ.get("BASE_URL", "http://localhost:8091").rstrip("/")
 ADMIN = os.environ.get("ADMIN_PASSWORD", "integrity-test")
 PROJECT = os.environ.get("COMPOSE_PROJECT", "stpt-integrity-test")
-PG_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "quiz")
+PG_USER = os.environ.get("POSTGRES_USER", "szyca")
+PG_DB = os.environ.get("POSTGRES_DB", "szyca")
+PG_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "szyca")
 
 
 def http(
@@ -68,16 +70,16 @@ def psql(query: str) -> str:
             "deploy/docker-compose.yml",
             "exec",
             "-T",
-            "quiz",
+            "szyca",
             "env",
             f"PGPASSWORD={PG_PASSWORD}",
             "psql",
             "-h",
             "127.0.0.1",
             "-U",
-            "quiz",
+            PG_USER,
             "-d",
-            "quiz",
+            PG_DB,
             "-Atc",
             query,
         ],

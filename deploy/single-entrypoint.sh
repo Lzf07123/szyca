@@ -13,7 +13,7 @@ if [ ! -s "$PGDATA/PG_VERSION" ]; then
     chown postgres:postgres "$password_file"
     su-exec postgres initdb \
         -D "$PGDATA" \
-        -U "${POSTGRES_USER:-quiz}" \
+        -U "${POSTGRES_USER:-szyca}" \
         --pwfile="$password_file" \
         --auth-local=trust \
         --auth-host=scram-sha-256
@@ -21,9 +21,9 @@ if [ ! -s "$PGDATA/PG_VERSION" ]; then
 fi
 
 su-exec postgres pg_ctl -D "$PGDATA" -w -o "-c listen_addresses='' -c port=5432" start
-if ! su-exec postgres psql -h /run/postgresql -U "${POSTGRES_USER:-quiz}" -d postgres -Atc \
-    "SELECT 1 FROM pg_database WHERE datname = '${POSTGRES_DB:-quiz}'" | grep -q 1; then
-    su-exec postgres createdb -h /run/postgresql -U "${POSTGRES_USER:-quiz}" "${POSTGRES_DB:-quiz}"
+if ! su-exec postgres psql -h /run/postgresql -U "${POSTGRES_USER:-szyca}" -d postgres -Atc \
+    "SELECT 1 FROM pg_database WHERE datname = '${POSTGRES_DB:-szyca}'" | grep -q 1; then
+    su-exec postgres createdb -h /run/postgresql -U "${POSTGRES_USER:-szyca}" "${POSTGRES_DB:-szyca}"
 fi
 su-exec postgres pg_ctl -D "$PGDATA" -w -m fast stop
 

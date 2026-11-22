@@ -13,7 +13,7 @@ if [ -z "$IMAGE" ]; then
 fi
 
 echo "构建镜像：$IMAGE"
-$COMPOSE build quiz
+$COMPOSE build szyca
 
 if [ "${1:-}" = "--push" ]; then
     echo "推送镜像：$IMAGE"
