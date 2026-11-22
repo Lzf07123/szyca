@@ -8,10 +8,12 @@ interface Campaign {
   id: number
   name: string
   status: 'draft' | 'active' | 'paused' | 'ended'
+  state: 'upcoming' | 'active' | 'paused' | 'ended'
   starts_at?: string
   ends_at?: string
   eligibility: 'completed_round' | 'min_score'
   eligibility_min_score?: number
+  prizes: Array<{ name: string; remaining: number }>
 }
 
 interface Draw {
@@ -38,9 +40,9 @@ const errorCopy: Record<string, string> = {
 
 function campaignState(campaign: Campaign | null) {
   if (!campaign) return '暂无可参与活动'
-  if (campaign.status === 'active') return '活动进行中'
-  if (campaign.status === 'paused') return '活动暂停'
-  if (campaign.status === 'ended') return '活动已结束'
+  if (campaign.state === 'active') return '活动进行中'
+  if (campaign.state === 'paused') return '活动暂停'
+  if (campaign.state === 'ended') return '活动已结束'
   return '活动未开始'
 }
 
@@ -110,7 +112,7 @@ export default function Lottery() {
     }
   }
 
-  const canDraw = authenticated && eligible && campaign?.status === 'active' && !draw
+  const canDraw = authenticated && eligible && campaign?.state === 'active' && !draw
 
   return (
     <>
@@ -148,6 +150,19 @@ export default function Lottery() {
                   </dd>
                 </div>
               </dl>
+              {campaign.prizes.length > 0 && (
+                <div className="lottery-prizes">
+                  <span>本期奖品</span>
+                  <ul>
+                    {campaign.prizes.map((prize) => (
+                      <li key={prize.name}>
+                        <span>{prize.name}</span>
+                        <small>剩余 {prize.remaining}</small>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {draw ? (
                 <div className={`draw-result ${draw.result === 'won' ? 'won' : 'neutral'}`} aria-live="polite">
                   <span>{draw.result === 'no_win' ? 'THANKS' : 'YOU WON'}</span>

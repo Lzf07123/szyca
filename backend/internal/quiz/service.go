@@ -410,6 +410,28 @@ func (s *Service) MyStats(ctx context.Context, userID int64) (*MyStats, error) {
 	}, nil
 }
 
+// LotteryEligible exposes a read-only eligibility query to the lottery module.
+// Lottery never writes quiz tables and does not depend on quiz internals.
+func (s *Service) LotteryEligible(
+	ctx context.Context,
+	userID int64,
+	kind string,
+	minScore, minimumQuestions int,
+) (bool, error) {
+	switch kind {
+	case "completed_round":
+		return s.store.HasCompletedRound(ctx, userID, minimumQuestions)
+	case "min_score":
+		stats, err := s.store.BestRoundStats(ctx, userID)
+		if err != nil {
+			return false, err
+		}
+		return stats.Count > 0 && stats.Score >= minScore, nil
+	default:
+		return false, errors.New("unsupported lottery eligibility")
+	}
+}
+
 // 全量榜缓存：读写分离 + 后台定时刷新；读请求永不被 DB 查询阻塞，
 // 高并发下每 1s 最多一次 DB 聚合，WS 推送/轮询/个人名次共用。
 var (

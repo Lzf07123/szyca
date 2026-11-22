@@ -627,6 +627,24 @@ func (s *Store) BestRoundStats(ctx context.Context, userID int64) (*RoundStats, 
 	return st, nil
 }
 
+func (s *Store) HasCompletedRound(ctx context.Context, userID int64, minimumQuestions int) (bool, error) {
+	if minimumQuestions <= 0 {
+		minimumQuestions = 1
+	}
+	var completed bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM attempts
+			WHERE user_id = $1 AND counted
+			GROUP BY round_no
+			HAVING count(DISTINCT question_id) >= $2
+		)`,
+		userID, minimumQuestions,
+	).Scan(&completed)
+	return completed, err
+}
+
 // ---------- quiz state ----------
 
 func (s *Store) QuizState(ctx context.Context) (string, error) {
