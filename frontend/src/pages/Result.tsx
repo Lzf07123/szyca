@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
+import { usePageMeta } from '../components/PageMeta'
 
 interface Me {
   user_id: number
@@ -22,6 +23,7 @@ interface Entry {
 }
 
 export default function Result() {
+  usePageMeta('我的成绩 · 计算机协会', '查看本轮答题成绩、正确答案与实时排名。')
   const nav = useNavigate()
   const [me, setMe] = useState<Me | null>(null)
   const [top, setTop] = useState<Entry[]>([])

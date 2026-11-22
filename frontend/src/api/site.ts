@@ -1,36 +1,165 @@
-import { useEffect, useState } from 'react'
+import {
+  createContext,
+  createElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
+import { FALLBACK_SITE } from '../brand'
 import { api } from './client'
 
-// 将站点 Logo 应用到浏览器标签页图标；传空字符串时移除（恢复默认）。
+export interface Brand {
+  name: string
+  short_name: string
+  description: string
+  title: string
+  logo_url: string
+}
+
+export interface NavItem {
+  label: string
+  to: string
+}
+
+export interface FooterLink {
+  label: string
+  href: string
+}
+
+export interface FooterSettings {
+  owner: string
+  license: string
+  icp: string
+  icp_icon: string
+  police: string
+  police_icon: string
+  links: FooterLink[]
+}
+
+export interface SiteFeature {
+  key: 'quiz' | 'lottery' | 'join' | 'screen'
+  enabled: boolean
+  config: Record<string, unknown>
+}
+
+export interface SectionItem {
+  title?: string
+  body?: string
+  image_url?: string
+}
+
+export interface SectionConfig {
+  eyebrow?: string
+  title?: string
+  subtitle?: string
+  body?: string
+  primary_label?: string
+  primary_to?: string
+  secondary_label?: string
+  secondary_to?: string
+  action_label?: string
+  action_to?: string
+  items?: SectionItem[]
+}
+
+export interface HomeSection {
+  id: number
+  kind: 'hero' | 'about' | 'activities' | 'quiz' | 'lottery' | 'join' | 'gallery'
+  enabled: boolean
+  sort: number
+  config: SectionConfig
+  status: string
+}
+
+export interface SiteBackground {
+  id: number
+  path: string
+}
+
+export interface SiteQrcode {
+  id: number
+  title: string
+  image_url: string
+}
+
+export interface SiteData {
+  brand: Brand
+  nav: NavItem[]
+  footer: FooterSettings
+  features: SiteFeature[]
+  sections: HomeSection[]
+  backgrounds: SiteBackground[]
+  qrcodes: SiteQrcode[]
+}
+
+interface SiteContextValue {
+  site: SiteData
+  loading: boolean
+  error: string
+  reload: () => Promise<void>
+  featureEnabled: (key: SiteFeature['key']) => boolean
+}
+
+const SiteContext = createContext<SiteContextValue | null>(null)
+
 export function setFavicon(url: string) {
   const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
   if (!url) {
-    if (link && link.dataset.auto === '1') link.remove()
+    if (link?.dataset.auto === '1') link.remove()
     return
   }
-  const el = link ?? document.createElement('link')
-  el.rel = 'icon'
-  el.dataset.auto = '1'
-  el.href = url
-  if (!el.parentNode) document.head.appendChild(el)
+  const element = link ?? document.createElement('link')
+  element.rel = 'icon'
+  element.dataset.auto = '1'
+  element.href = url
+  if (!element.parentNode) document.head.appendChild(element)
 }
 
-// 站点级配置（Logo 等）：随页面加载拉取；未配置 Logo 时返回空字符串（使用内置样式）。
-export function useLogoURL(): string {
-  const [url, setUrl] = useState('')
-  useEffect(() => {
-    let alive = true
-    void api<{ logo_url?: string }>('/api/config')
-      .then((d) => {
-        if (alive) {
-          setUrl(d.logo_url || '')
-          setFavicon(d.logo_url || '')
-        }
-      })
-      .catch(() => undefined)
-    return () => {
-      alive = false
+export function SiteProvider({ children }: { children: ReactNode }) {
+  const [site, setSite] = useState<SiteData>(FALLBACK_SITE)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const reload = useCallback(async () => {
+    try {
+      const next = await api<SiteData>('/api/site')
+      setSite(next)
+      setError('')
+      setFavicon(next.brand.logo_url)
+    } catch (cause) {
+      setError((cause as Error).message)
+    } finally {
+      setLoading(false)
     }
   }, [])
-  return url
+
+  useEffect(() => {
+    void reload()
+  }, [reload])
+
+  const value = useMemo<SiteContextValue>(
+    () => ({
+      site,
+      loading,
+      error,
+      reload,
+      featureEnabled: (key) => site.features.find((feature) => feature.key === key)?.enabled ?? false,
+    }),
+    [site, loading, error, reload],
+  )
+
+  return createElement(SiteContext.Provider, { value }, children)
+}
+
+export function useSite(): SiteContextValue {
+  const context = useContext(SiteContext)
+  if (!context) throw new Error('useSite must be used inside SiteProvider')
+  return context
+}
+
+export function useLogoURL(): string {
+  return useSite().site.brand.logo_url
 }

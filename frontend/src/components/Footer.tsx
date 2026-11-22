@@ -1,63 +1,45 @@
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api } from '../api/client'
-
-interface FooterInfo {
-  owner: string
-  license: string
-  icp: string
-  icp_icon: string
-  police: string
-  police_icon: string
-}
-
-const FALLBACK: FooterInfo = {
-  owner: '计算机协会 · 汕头职业技术学院',
-  license: '开源协议：MIT',
-  icp: '',
-  icp_icon: '',
-  police: '',
-  police_icon: '',
-}
+import { useSite } from '../api/site'
 
 export default function Footer() {
-  const [info, setInfo] = useState<FooterInfo>(FALLBACK)
-
-  useEffect(() => {
-    void api<{ footer?: FooterInfo }>('/api/config')
-      .then((d) => {
-        if (d.footer) setInfo(d.footer)
-      })
-      .catch(() => undefined)
-  }, [])
+  const { site } = useSite()
+  const { footer, brand } = site
 
   return (
-    <footer className="footer">
+    <footer className="footer public-footer">
       <div className="footer-inner">
-        <div className="footer-meta">
-          <span>
-            © {new Date().getFullYear()} {info.owner || FALLBACK.owner}
-          </span>
-          {info.license && <span>{info.license}</span>}
-          {info.icp ? (
-            <a className="beian" href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">
-              {info.icp_icon && <img src={info.icp_icon} alt="" />}
-              {info.icp}
-            </a>
-          ) : (
-            <span className="footer-icp">ICP备案号：待填写</span>
+        <div className="footer-brand">
+          <span className="footer-mark" aria-hidden="true">CA</span>
+          <div>
+            <strong>{footer.owner || brand.name}</strong>
+            <p>学习 · 协作 · 创造</p>
+          </div>
+        </div>
+        <nav className="footer-links" aria-label="页脚导航">
+          {footer.links.map((link) =>
+            link.href.startsWith('/') ? (
+              <Link key={link.href} to={link.href}>{link.label}</Link>
+            ) : (
+              <a key={link.href} href={link.href}>{link.label}</a>
+            ),
           )}
-          {info.police && (
+        </nav>
+        <div className="footer-meta">
+          <span>© {new Date().getFullYear()} {footer.owner || brand.name}</span>
+          {footer.license && <span>{footer.license}</span>}
+          {footer.icp && (
+            <a className="beian" href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">
+              {footer.icp_icon && <img src={footer.icp_icon} alt="" />}
+              {footer.icp}
+            </a>
+          )}
+          {footer.police && (
             <a className="beian" href="https://beian.mps.gov.cn/" target="_blank" rel="noreferrer">
-              {info.police_icon && <img src={info.police_icon} alt="" />}
-              {info.police}
+              {footer.police_icon && <img src={footer.police_icon} alt="" />}
+              {footer.police}
             </a>
           )}
         </div>
-        <span className="footer-links">
-          <Link to="/join">加入我们</Link>
-          <Link to="/screen">排行榜</Link>
-        </span>
       </div>
     </footer>
   )

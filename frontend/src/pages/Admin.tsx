@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ChangeEvent } from 'react'
 import { api } from '../api/client'
 import { setFavicon } from '../api/site'
+import { usePageMeta } from '../components/PageMeta'
 
 interface Bg {
   id: number
@@ -42,6 +43,7 @@ interface OvResp {
 }
 
 export default function Admin() {
+  usePageMeta('后台管理 · 计算机协会', '计算机协会官网后台管理。')
   const [pass, setPass] = useState(() => sessionStorage.getItem('admin_pass') || '')
   const [verified, setVerified] = useState(false)
   const [ov, setOv] = useState<OvResp | null>(null)

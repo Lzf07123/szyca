@@ -145,6 +145,17 @@ func (s *Service) Public(ctx context.Context) (*Public, error) {
 	if err != nil {
 		return nil, err
 	}
+	filteredSections := sections[:0]
+	for _, section := range sections {
+		if enabled[section.Kind] == false {
+			switch section.Kind {
+			case FeatureQuiz, FeatureLottery, FeatureJoin:
+				continue
+			}
+		}
+		filteredSections = append(filteredSections, section)
+	}
+	sections = filteredSections
 	backgrounds, err := s.Backgrounds(ctx)
 	if err != nil {
 		return nil, err

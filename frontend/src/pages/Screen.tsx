@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, getToken } from '../api/client'
 import { useLogoURL } from '../api/site'
+import { usePageMeta } from '../components/PageMeta'
 import { QuizSocket, wsURL } from '../ws/socket'
 
 interface Entry {
@@ -25,6 +26,7 @@ interface MyRank {
 }
 
 export default function Screen() {
+  usePageMeta('实时排行榜 · 计算机协会', '计算机协会招新答题现场实时排行榜。')
   const logoURL = useLogoURL()
   const [top, setTop] = useState<Entry[]>([])
   const [stats, setStats] = useState<Stats>({ participants: 0, attempts: 0, online: 0 })
