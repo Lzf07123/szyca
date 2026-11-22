@@ -1,0 +1,11 @@
+.git
+.env
+.DS_Store
+docs
+loadtest
+scripts
+题库
+frontend/node_modules
+frontend/dist
+backend/uploads
+*.log

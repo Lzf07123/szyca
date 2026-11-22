@@ -1,0 +1,8 @@
+services:
+  quiz:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        BASE_IMAGE_REGISTRY: ${BASE_IMAGE_REGISTRY:-}
+        SOURCE_MIRROR: ${SOURCE_MIRROR:-}

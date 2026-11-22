@@ -10,13 +10,13 @@ import (
 	"syscall"
 	"time"
 
-	"stpt/quiz/internal/config"
-	"stpt/quiz/internal/httpapi"
-	"stpt/quiz/internal/publish"
-	"stpt/quiz/internal/quiz"
-	"stpt/quiz/internal/rank"
-	"stpt/quiz/internal/store"
-	"stpt/quiz/internal/ws"
+	"szyca/internal/config"
+	"szyca/internal/httpapi"
+	"szyca/internal/publish"
+	"szyca/internal/quiz"
+	"szyca/internal/rank"
+	"szyca/internal/store"
+	"szyca/internal/ws"
 )
 
 func main() {

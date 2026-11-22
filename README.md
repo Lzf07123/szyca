@@ -1,7 +1,8 @@
-# 计算机协会招新答题系统
+# szyca
 
-现场高并发答题：实时计分、全量排行榜、大屏特效、加入我们（多二维码）、后台运营。
-技术栈：Go 1.22 + gorilla/websocket + Redis + PostgreSQL + React 18 (Vite) + Nginx，全程 Docker 化。
+计算机协会招新答题系统：现场高并发答题、实时计分、全量排行榜、大屏特效、加入我们（多二维码）、后台运营。
+技术栈：Go 1.22 + gorilla/websocket + Redis + PostgreSQL + React 18 (Vite) + Nginx。
+生产环境合并为**单镜像、单容器、单数据卷**；低配机器只拉取预构建镜像，不需要本地编译。
 
 > 设计文档见 [docs/实现方案.md](docs/实现方案.md)
 
@@ -13,12 +14,16 @@
 - **身份规则**：设备指纹去重（同设备换昵称需先放弃）；放弃身份需二次确认并告知副作用；放弃后昵称永久封存、榜单留痕；可多轮答题取历史最佳成绩
 - **后台管理**（口令验证后可见）：系统概览（资源/访问）、答题控制/特效/公告、群二维码图片切换、题库增删停/批量导入 CSV、成绩导出 CSV、二维码增删改（标题/换图/启停）、站点 Logo 上传/恢复、首页背景/页脚信息（ICP+公安备案）配置
 
-## 快速开始（全程 Docker，不污染本机）
+## 快速开始（低配机器：直接拉取镜像）
 
 ```bash
-cp .env.example .env   # 可选：覆盖默认配置（变量见下表；模板仅占位值，不含真实配置）
-docker compose -f deploy/docker-compose.yml up -d --build
+cp .env.example .env
+# 编辑 .env：QUIZ_IMAGE_REGISTRY + QUIZ_IMAGE 指向远程仓库，修改 ADMIN_PASSWORD
+docker compose -f deploy/docker-compose.yml pull
+docker compose -f deploy/docker-compose.yml up -d
 ```
+
+低配机器运行期只需要 `szyca` 一个镜像，不会拉取 PostgreSQL、Redis、Nginx 或 Node/Go 基础镜像；这些组件已内置。建议至少 1 GB 内存，生产库存放于 `szyca_quizdata` 单卷。
 
 | 入口 | 说明 |
 |---|---|
@@ -29,34 +34,53 @@ docker compose -f deploy/docker-compose.yml up -d --build
 | /admin | 后台管理（口令见 .env） |
 | /healthz | 健康检查 |
 
-停止：`docker compose -f deploy/docker-compose.yml down`（加 `-v` 清空数据库与上传文件）
+停止：`docker compose -f deploy/docker-compose.yml down`（加 `-v` 清空数据库与上传文件）。
+
+开发机本地构建使用 build override：
+
+```bash
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.build.yml up -d --build
+```
 
 ## 环境变量（.env，不入库；模板见 .env.example）
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `ADMIN_PASSWORD` | admin123 | 后台口令（务必修改） |
+| `POSTGRES_PASSWORD` | quiz | 单容器内 PostgreSQL 口令（生产务必修改） |
 | `QUESTION_SECONDS` | 20 | 每题倒计时（秒） |
 | `ANSWER_GRACE_SECONDS` | 20 | 网络抖动/断线补交宽限（秒）；截止时间本身仍以服务端记录为准 |
 | `QUESTION_COUNT` | 10 | 每轮抽题数 |
 | `WEB_PORT` | 8080 | 对外端口 |
 | `WS_ALLOWED_ORIGINS` | （空） | 额外允许的 WebSocket Origin，逗号分隔；同源与本机开发默认允许 |
+| `QUIZ_IMAGE_REGISTRY` | （空） | 应用镜像仓库前缀，需以 `/` 结尾；独立于构建基础镜像 |
+| `QUIZ_IMAGE` | szyca:latest | 远程应用镜像名与 tag |
+| `QUIZ_PULL_POLICY` | missing | Compose 拉取策略；低配机可设 `always` |
 
-### 基础镜像与软件源（构建/部署阶段均可变）
+### 远程镜像与本地构建
 
 | 变量 | 默认 | 作用 |
 |---|---|---|
-| `IMAGE_REGISTRY` | （空） | 基础镜像 registry 前缀，统一作用于 golang/alpine/node/nginx/postgres/redis 六个镜像（需以 `/` 结尾） |
+| `QUIZ_IMAGE_REGISTRY` | （空） | 最终应用镜像 registry 前缀，与 `QUIZ_IMAGE` 拼接 |
+| `BASE_IMAGE_REGISTRY` | （空） | 仅开发构建时替换 golang/node/alpine 基础镜像前缀 |
 | `SOURCE_MIRROR` | （空） | 软件源统一开关：空=官方源；`cn`=国内镜像组合（Go 走 goproxy.cn、npm 走 npmmirror、apk 走阿里云） |
 
-- 国内加速（写入 `.env` 后重新 `up -d --build`）：
+示例：远程私有仓库
 
 ```bash
-SOURCE_MIRROR=cn
-#IMAGE_REGISTRY=docker.1ms.run/   # 如需镜像仓库前缀（示例，按实际可用镜像源填写）
+QUIZ_IMAGE_REGISTRY=registry.example.com/
+QUIZ_IMAGE=szyca:latest
+QUIZ_PULL_POLICY=always
 ```
 
-页脚/备案/二维码/背景图/站点 Logo 等运行期内容一律在后台配置，持久化于 postgres 与 uploads 两个 Docker 数据卷，不走环境变量。
+构建并推送镜像：
+
+```bash
+scripts/publish_image.sh          # 构建前可设置 BASE_IMAGE_REGISTRY / SOURCE_MIRROR=cn
+scripts/publish_image.sh --push
+```
+
+页脚/备案/二维码/背景图/站点 Logo 等运行期内容一律在后台配置，数据库与上传文件统一持久化在 `quizdata` 单卷。
 
 ## 后台使用速查
 
@@ -93,24 +117,26 @@ SOURCE_MIRROR=cn
 ```
 backend/    Go 后端（cmd/server + internal/{config,store,rank,publish,quiz,ws,httpapi}）
 frontend/   React 18 + Vite（6 页面 + WS 客户端 + 幂等重试）
-deploy/     docker-compose.yml + nginx.conf + web 构建镜像
+deploy/     单容器 Dockerfile + Compose + Nginx/Supervisor 配置
 docs/       实现方案
 ```
 
 ## 云端部署要点
 
-- 已备案域名 + 外部反向代理：TLS 在外部反代终止，本机 Nginx 只走 HTTP；**两层代理都要透传 WebSocket Upgrade 头**（见 docs §8-§9）
+- 已备案域名 + 外部反向代理：TLS 在外部反代终止，容器内 Nginx 只走 HTTP；**外部代理仍需透传 WebSocket Upgrade 头**（见 docs §8-§9）
 - 前端构建产物建议发布到 OSS+CDN（现场"进门一分钟"静态流量集中）
 - 上线前：`.env` 改强口令 → 后台录入真实题库/二维码/备案号 → 压测（§1.3 指标）→ 现场演练
+- 单容器只暴露 8080；PostgreSQL/Redis 仅监听容器回环地址。备份时复制 `szyca_quizdata` 卷即可同时保存数据库、Redis AOF 和上传文件。
 
 ## 压测（k6）
 
 ```bash
 # 隔离环境（独立端口与数据卷，不污染正式数据）
-WEB_PORT=8081 ADMIN_PASSWORD=loadtest docker compose -p stpt-loadtest -f deploy/docker-compose.yml up -d --build
+WEB_PORT=8081 ADMIN_PASSWORD=loadtest docker compose -p stpt-loadtest \
+  -f deploy/docker-compose.yml -f deploy/docker-compose.build.yml up -d --build
 curl -X POST http://localhost:8081/api/admin/quiz-state -H 'Content-Type: application/json' -H 'X-Admin-Token: loadtest' -d '{"state":"start"}'
 # 运行（400 VU：150 答题全流程 + 200 排行轮询 + 50 WebSocket）
-docker run --rm -i --network stpt-loadtest_default -e BASE_URL=http://web:8080 grafana/k6 run - < loadtest/k6-loadtest.js
+docker run --rm -i --network stpt-loadtest_default -e BASE_URL=http://quiz:8080 grafana/k6 run - < loadtest/k6-loadtest.js
 docker compose -p stpt-loadtest -f deploy/docker-compose.yml down -v
 ```
 
@@ -119,15 +145,16 @@ docker compose -p stpt-loadtest -f deploy/docker-compose.yml down -v
 ## 开发调试
 
 - 前端热更：`cd frontend && npm run dev`（已配代理到 :8080；仅开发环境使用，不污染部署）
-- 后端改代码后：`docker compose -f deploy/docker-compose.yml up -d --build app web`
-- 查看日志：`docker compose -f deploy/docker-compose.yml logs -f app`
+- 改代码后：`docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.build.yml up -d --build`
+- 查看日志：`docker compose -f deploy/docker-compose.yml logs -f quiz`
 
 ## 自动化回归（Docker 隔离栈）
 
 ```bash
 WEB_PORT=8091 ADMIN_PASSWORD=integrity-test \
 QUESTION_SECONDS=5 ANSWER_GRACE_SECONDS=2 \
-docker compose -p stpt-integrity-test -f deploy/docker-compose.yml up -d --build
+docker compose -p stpt-integrity-test \
+  -f deploy/docker-compose.yml -f deploy/docker-compose.build.yml up -d --build
 python3 scripts/integration_test.py
 docker compose -p stpt-integrity-test -f deploy/docker-compose.yml down -v
 ```

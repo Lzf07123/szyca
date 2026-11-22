@@ -7,7 +7,7 @@ import (
 	"log"
 	"time"
 
-	"stpt/quiz/internal/rank"
+	"szyca/internal/rank"
 )
 
 type envelope struct {

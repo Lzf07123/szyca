@@ -1,77 +1,35 @@
-name: stpt-quiz
+name: szyca
 
 services:
-  postgres:
-    image: ${IMAGE_REGISTRY:-}postgres:15-alpine
+  quiz:
+    image: "${QUIZ_IMAGE_REGISTRY:-}${QUIZ_IMAGE:-szyca:latest}"
+    pull_policy: ${QUIZ_PULL_POLICY:-missing}
     environment:
-      POSTGRES_USER: quiz
-      POSTGRES_PASSWORD: quiz
-      POSTGRES_DB: quiz
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U quiz -d quiz"]
-      interval: 3s
-      timeout: 3s
-      retries: 20
-    restart: unless-stopped
-
-  redis:
-    image: ${IMAGE_REGISTRY:-}redis:7-alpine
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 3s
-      timeout: 3s
-      retries: 20
-    restart: unless-stopped
-
-  app:
-    build:
-      context: ../backend
-      args:
-        IMAGE_REGISTRY: ${IMAGE_REGISTRY:-}
-        SOURCE_MIRROR: ${SOURCE_MIRROR:-}
-    environment:
-      APP_PORT: "8080"
-      DATABASE_URL: postgres://quiz:quiz@postgres:5432/quiz?sslmode=disable
-      REDIS_ADDR: redis:6379
+      APP_PORT: "8081"
+      DATABASE_URL: postgres://quiz:${POSTGRES_PASSWORD:-quiz}@127.0.0.1:5432/quiz?sslmode=disable
+      REDIS_ADDR: 127.0.0.1:6379
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
       QUESTION_SECONDS: ${QUESTION_SECONDS:-20}
       ANSWER_GRACE_SECONDS: ${ANSWER_GRACE_SECONDS:-20}
       QUESTION_COUNT: ${QUESTION_COUNT:-10}
       WS_ALLOWED_ORIGINS: ${WS_ALLOWED_ORIGINS:-}
-      UPLOAD_DIR: /app/uploads
+      UPLOAD_DIR: /data/uploads
       PG_POOL_MAX: ${PG_POOL_MAX:-20}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    volumes:
-      - uploads:/app/uploads
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    restart: unless-stopped
-
-  # 前端构建产物 + 反向代理一体（本机 Nginx；TLS 由外部反代终止）
-  web:
-    build:
-      context: ..
-      dockerfile: deploy/web/Dockerfile
-      args:
-        IMAGE_REGISTRY: ${IMAGE_REGISTRY:-}
-        SOURCE_MIRROR: ${SOURCE_MIRROR:-}
+      POSTGRES_DB: quiz
+      POSTGRES_USER: quiz
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quiz}
     ports:
       - "${WEB_PORT:-8080}:8080"
     volumes:
-      - uploads:/usr/share/nginx/html/uploads
-    depends_on:
-      - app
+      - quizdata:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
     restart: unless-stopped
+    stop_grace_period: 30s
 
 volumes:
-  pgdata:
-  uploads:
+  quizdata:
