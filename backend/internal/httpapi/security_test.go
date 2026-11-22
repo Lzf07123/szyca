@@ -1,12 +1,38 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"szyca/internal/config"
 )
+
+func TestPublicRuntimeReportsUptimeWithoutCache(t *testing.T) {
+	server := &Server{startedAt: time.Now().Add(-2*time.Minute - 5*time.Second)}
+	request := httptest.NewRequest(http.MethodGet, "/api/runtime", nil)
+	recorder := httptest.NewRecorder()
+
+	server.handlePublicRuntime(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("runtime status = %d", recorder.Code)
+	}
+	if got := recorder.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("runtime Cache-Control = %q, want no-store", got)
+	}
+	var payload struct {
+		UptimeSeconds int64 `json:"uptime_seconds"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode runtime: %v", err)
+	}
+	if payload.UptimeSeconds < 120 || payload.UptimeSeconds > 130 {
+		t.Fatalf("runtime uptime = %d, want about 125", payload.UptimeSeconds)
+	}
+}
 
 func TestClientIPOnlyTrustsConfiguredProxy(t *testing.T) {
 	server := &Server{cfg: config.Config{

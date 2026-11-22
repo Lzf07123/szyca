@@ -83,6 +83,7 @@ func (s *Server) Handler() http.Handler {
 
 	// 公开
 	mux.HandleFunc("GET /api/site", s.handleSite)
+	mux.HandleFunc("GET /api/runtime", s.handlePublicRuntime)
 	mux.HandleFunc("GET /api/backgrounds", s.handleBackgrounds)
 	mux.HandleFunc("GET /api/stats", s.withFeature(site.FeatureQuiz, s.handleStats))
 	mux.HandleFunc("POST /api/identity/abandon", s.withFeature(site.FeatureQuiz, s.handleAbandonIdentity))
@@ -443,6 +444,15 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 		"attempts":     st.Attempts,
 		"online":       online,
 	})
+}
+
+func (s *Server) handlePublicRuntime(w http.ResponseWriter, r *http.Request) {
+	uptime := int64(time.Since(s.startedAt).Seconds())
+	if uptime < 0 {
+		uptime = 0
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]int64{"uptime_seconds": uptime})
 }
 
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {

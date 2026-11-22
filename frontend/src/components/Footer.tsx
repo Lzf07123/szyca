@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useSite } from '../api/site'
+import BrandMark from './BrandMark'
 
 export default function Footer() {
   const { site } = useSite()
@@ -9,7 +10,7 @@ export default function Footer() {
     <footer className="footer public-footer">
       <div className="footer-inner">
         <div className="footer-brand">
-          <span className="footer-mark" aria-hidden="true"><span>CA</span></span>
+          <BrandMark variant="footer" />
           <div>
             <strong>{footer.owner || brand.name}</strong>
             <p>学习 / 协作 / 创造</p>

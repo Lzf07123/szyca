@@ -14,6 +14,7 @@ import {
   useLocation,
   useRouteError,
 } from 'react-router-dom'
+import BrandMark from './components/BrandMark'
 import Footer from './components/Footer'
 import CosmicBackdrop from './components/CosmicBackdrop'
 import { usePageMeta } from './components/PageMeta'
@@ -109,11 +110,7 @@ function Layout() {
       {!fullscreen && (
         <header className="topbar public-topbar">
           <Link className={`logo${site.brand.logo_url ? ' has-img' : ''}`} to="/" aria-label={`${site.brand.name}首页`}>
-            {site.brand.logo_url ? (
-              <img src={site.brand.logo_url} alt="" />
-            ) : (
-              <span className="logo-mark" aria-hidden="true"><span>CA</span></span>
-            )}
+            <BrandMark variant="header" />
             <span className="logo-copy">
               <b>{site.brand.name}</b>
               <small>COMPUTER ASSOCIATION</small>
