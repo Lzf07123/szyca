@@ -25,12 +25,16 @@ func TestPublicRuntimeReportsUptimeWithoutCache(t *testing.T) {
 	}
 	var payload struct {
 		UptimeSeconds int64 `json:"uptime_seconds"`
+		StartedAt     string `json:"started_at"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode runtime: %v", err)
 	}
 	if payload.UptimeSeconds < 120 || payload.UptimeSeconds > 130 {
 		t.Fatalf("runtime uptime = %d, want about 125", payload.UptimeSeconds)
+	}
+	if _, err := time.Parse(time.RFC3339, payload.StartedAt); err != nil {
+		t.Fatalf("runtime started_at is invalid: %v", err)
 	}
 }
 

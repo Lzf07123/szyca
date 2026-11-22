@@ -22,15 +22,72 @@ function splitTitle(title: string) {
   return parts.length > 2 ? [parts.slice(0, -1).join(''), parts[parts.length - 1] || ''] : parts
 }
 
-function formatUptime(seconds: number | null) {
+function clockText(totalSeconds: number) {
+  const hours = Math.floor((totalSeconds % 86400) / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return [hours, minutes, seconds].map((value) => String(value).padStart(2, '0')).join(':')
+}
+
+function daysInMonthUTC(year: number, month: number) {
+  return new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
+}
+
+function addCalendarYears(date: Date, years: number) {
+  const year = date.getUTCFullYear() + years
+  const month = date.getUTCMonth()
+  return new Date(Date.UTC(
+    year,
+    month,
+    Math.min(date.getUTCDate(), daysInMonthUTC(year, month)),
+    date.getUTCHours(),
+    date.getUTCMinutes(),
+    date.getUTCSeconds(),
+    date.getUTCMilliseconds(),
+  ))
+}
+
+function addCalendarMonths(date: Date, months: number) {
+  const monthIndex = date.getUTCMonth() + months
+  const year = date.getUTCFullYear() + Math.floor(monthIndex / 12)
+  const month = ((monthIndex % 12) + 12) % 12
+  return new Date(Date.UTC(
+    year,
+    month,
+    Math.min(date.getUTCDate(), daysInMonthUTC(year, month)),
+    date.getUTCHours(),
+    date.getUTCMinutes(),
+    date.getUTCSeconds(),
+    date.getUTCMilliseconds(),
+  ))
+}
+
+function formatUptime(seconds: number | null, startedAt: string | null) {
   if (seconds === null) return '--'
-  const totalMinutes = Math.max(0, Math.floor(seconds / 60))
-  const days = Math.floor(totalMinutes / 1440)
-  const hours = Math.floor((totalMinutes % 1440) / 60)
-  const minutes = totalMinutes % 60
-  if (days > 0) return `${days}d ${hours}h`
-  if (hours > 0) return `${hours}h ${minutes}m`
-  return `${minutes}m`
+  const totalSeconds = Math.max(0, Math.floor(seconds))
+  const days = Math.floor(totalSeconds / 86400)
+  if (totalSeconds < 30 * 86400) {
+    const clock = clockText(totalSeconds)
+    return days > 0 ? `${days}d ${clock}` : clock
+  }
+
+  const startedMs = startedAt ? Date.parse(startedAt) : Number.NaN
+  if (!Number.isFinite(startedMs)) {
+    return `${days}d ${clockText(totalSeconds)}`
+  }
+
+  const start = new Date(startedMs)
+  const end = new Date(startedMs + totalSeconds * 1000)
+  let years = 0
+  while (addCalendarYears(start, years + 1).getTime() <= end.getTime()) years += 1
+  let cursor = addCalendarYears(start, years)
+  let months = 0
+  while (months < 12 && addCalendarMonths(cursor, months + 1).getTime() <= end.getTime()) months += 1
+  cursor = addCalendarMonths(cursor, months)
+  const remainderSeconds = Math.max(0, Math.floor((end.getTime() - cursor.getTime()) / 1000))
+  const remainderDays = Math.floor(remainderSeconds / 86400)
+  const clock = clockText(remainderSeconds)
+  return `${years}年 ${months}月 ${remainderDays}日 ${clock}`
 }
 
 type ModuleKind = 'quiz' | 'rank' | 'join'
@@ -75,16 +132,19 @@ function Hero({
   secondaryTo,
   backgrounds,
   uptimeSeconds,
+  uptimeStartedAt,
 }: {
   section: HomeSection
   primaryTo?: string
   secondaryTo?: string
   backgrounds: string[]
   uptimeSeconds: number | null
+  uptimeStartedAt: string | null
 }) {
   const config = section.config
   const title = config.title || '把好奇心，写进每一行代码'
   const lines = splitTitle(title)
+  const uptimeIsLong = uptimeSeconds !== null && uptimeSeconds >= 30 * 86400
 
   return (
     <section className="home-hero cosmic-hero" aria-labelledby="hero-title">
@@ -121,7 +181,10 @@ function Hero({
         <dl className="hero-facts" data-reveal style={{ '--reveal-delay': '380ms' } as CSSProperties}>
           <div><dt>03</dt><dd>核心模块 / MODULES</dd></div>
           <div><dt>150</dt><dd>开放题目 / QUESTIONS</dd></div>
-          <div><dt>{formatUptime(uptimeSeconds)}</dt><dd>系统在线 / UPTIME</dd></div>
+          <div className={uptimeIsLong ? 'uptime-fact is-long' : 'uptime-fact'}>
+            <dt>{formatUptime(uptimeSeconds, uptimeStartedAt)}</dt>
+            <dd>系统在线 / UPTIME</dd>
+          </div>
         </dl>
       </div>
 
@@ -310,6 +373,7 @@ function LotterySignal({
 export default function Home() {
   const { site, featureEnabled } = useSite()
   const [uptimeSeconds, setUptimeSeconds] = useState<number | null>(null)
+  const [uptimeStartedAt, setUptimeStartedAt] = useState<string | null>(null)
   const sections = [...site.sections].filter((section) => section.enabled).sort((a, b) => a.sort - b.sort)
   const hero = sections.find((section) => section.kind === 'hero')
   const about = sections.find((section) => section.kind === 'about')
@@ -327,20 +391,30 @@ export default function Home() {
 
   useEffect(() => {
     let alive = true
+    let baseSeconds: number | null = null
+    let syncedAt = 0
     const syncUptime = () => {
-      void api<{ uptime_seconds: number }>('/api/runtime')
+      void api<{ uptime_seconds: number; started_at: string }>('/api/runtime')
         .then((runtime) => {
           if (alive && Number.isFinite(runtime.uptime_seconds)) {
-            setUptimeSeconds(runtime.uptime_seconds)
+            baseSeconds = runtime.uptime_seconds
+            syncedAt = Date.now()
+            setUptimeSeconds(baseSeconds)
+            setUptimeStartedAt(runtime.started_at || null)
           }
         })
         .catch(() => undefined)
     }
     syncUptime()
-    const timer = window.setInterval(syncUptime, 60_000)
+    const syncTimer = window.setInterval(syncUptime, 60_000)
+    const tickTimer = window.setInterval(() => {
+      if (baseSeconds === null) return
+      setUptimeSeconds(baseSeconds + Math.floor((Date.now() - syncedAt) / 1000))
+    }, 1000)
     return () => {
       alive = false
-      window.clearInterval(timer)
+      window.clearInterval(syncTimer)
+      window.clearInterval(tickTimer)
     }
   }, [])
 
@@ -358,6 +432,7 @@ export default function Home() {
             secondaryTo={secondaryTo}
             backgrounds={backgrounds}
             uptimeSeconds={uptimeSeconds}
+            uptimeStartedAt={uptimeStartedAt}
           />
         )}
         <Whoami section={about} activities={activities} />

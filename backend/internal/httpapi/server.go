@@ -452,7 +452,10 @@ func (s *Server) handlePublicRuntime(w http.ResponseWriter, r *http.Request) {
 		uptime = 0
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, map[string]int64{"uptime_seconds": uptime})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"uptime_seconds": uptime,
+		"started_at":     s.startedAt.UTC().Format(time.RFC3339),
+	})
 }
 
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
