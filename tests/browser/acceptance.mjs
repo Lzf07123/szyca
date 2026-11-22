@@ -333,6 +333,7 @@ async function assertRuntimeAndBrandAssets(page, label) {
     return {
       runtimeStatus: response.status,
       uptimeSeconds: runtime.uptime_seconds,
+      startedAt: runtime.started_at,
       uptime,
       uptimeLabel,
       headerSrc: headerLogo?.getAttribute('src') ?? '',
@@ -346,17 +347,65 @@ async function assertRuntimeAndBrandAssets(page, label) {
   })
   expect(state.runtimeStatus === 200, `${label}: runtime endpoint failed`)
   expect(Number.isFinite(state.uptimeSeconds), `${label}: runtime uptime is invalid`)
+  expect(Number.isFinite(Date.parse(state.startedAt)), `${label}: runtime started_at is invalid`)
   expect(state.uptime !== '24h', `${label}: hero still uses the hard-coded 24h uptime`)
-  expect(/^(--|\d+[dhm]\s?\d*[hm]?)$/.test(state.uptime), `${label}: unexpected uptime format ${state.uptime}`)
+  expect(/^(--|(?:\d+d\s)?\d{2}:\d{2}:\d{2})$/.test(state.uptime), `${label}: unexpected uptime format ${state.uptime}`)
   expect(state.uptimeLabel.includes('UPTIME'), `${label}: uptime label is missing`)
   expect(!state.orbitHasLogo, `${label}: Hero orbit must not render a brand logo`)
   expect(state.orbitText === '', `${label}: Hero orbit must not contain placeholder text`)
+  await page.waitForFunction(
+    (previous) => {
+      const value = document.querySelector('.hero-facts div:nth-child(3) dt')?.textContent?.trim()
+      return value && value !== previous
+    },
+    state.uptime,
+    { timeout: 2500 },
+  )
+  const nextUptime = await page.locator('.hero-facts div:nth-child(3) dt').textContent()
+  expect(nextUptime?.trim() !== state.uptime, `${label}: uptime does not advance to the second`)
   if (state.headerSrc) {
     expect(state.footerSrc === state.headerSrc, `${label}: footer logo is not synchronized`)
     expect(state.logoBackground === 'rgba(0, 0, 0, 0)', `${label}: header logo still has a background`)
     expect(state.logoBorder === 0, `${label}: header logo still has a border`)
     expect(state.logoPadding === '0px', `${label}: header logo still has padding`)
   }
+}
+
+async function assertFutureUptimeFormat(browser) {
+  const uptimeSeconds = 400 * 86400 + 3 * 3600 + 4 * 60 + 5
+  const startedAt = new Date(Date.now() - uptimeSeconds * 1000).toISOString()
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } })
+  const page = await context.newPage()
+  await page.route(
+    (url) => new URL(url).pathname === '/api/runtime',
+    (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ uptime_seconds: uptimeSeconds, started_at: startedAt }),
+    }),
+  )
+  await page.goto(BASE + '/', { waitUntil: 'networkidle' })
+  await page.waitForTimeout(300)
+  const state = await page.evaluate(() => {
+    const fact = document.querySelector('.hero-facts div:nth-child(3)')
+    const value = fact?.querySelector('dt')?.textContent?.trim() ?? ''
+    const rect = fact?.getBoundingClientRect()
+    return {
+      value,
+      width: rect ? Math.round(rect.width) : 0,
+      scrollWidth: document.documentElement.scrollWidth,
+      viewport: window.innerWidth,
+      long: fact?.classList.contains('is-long') ?? false,
+    }
+  })
+  expect(state.long, 'long uptime did not switch to the calendar layout')
+  expect(
+    /^\d+年 \d+月 \d+日 \d{2}:\d{2}:\d{2}$/.test(state.value),
+    `future uptime format is invalid: ${state.value}`,
+  )
+  expect(state.width > 0, 'future uptime fact has no width')
+  expect(state.scrollWidth <= state.viewport, 'future uptime format causes horizontal overflow')
+  await context.close()
 }
 
 async function axeCheck(page, label) {
@@ -657,6 +706,8 @@ async function main() {
     const fallbackHeading = (await fallbackPage.locator('#hero-title').textContent())?.trim()
     expect(fallbackHeading === '把好奇心，写进每一行代码', `fallback home missing: ${fallbackHeading}`)
     await fallback.close()
+
+    await assertFutureUptimeFormat(browser)
 
     const unexpectedErrors = errors.filter(
       (message) => !(message.startsWith('site-fallback: console Failed to load resource') && message.includes('ERR_FAILED')),
