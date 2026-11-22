@@ -1,6 +1,7 @@
 const TOKEN_KEY = 'quiz_token'
 const PENDING_KEY = 'quiz_pending_answers'
 const FP_KEY = 'device_fp'
+let csrfToken = ''
 
 export function getToken(): string | null {
   return sessionStorage.getItem(TOKEN_KEY)
@@ -12,6 +13,18 @@ export function setToken(t: string) {
 
 export function clearToken() {
   sessionStorage.removeItem(TOKEN_KEY)
+}
+
+export function setCSRFToken(value: string) {
+  csrfToken = value
+}
+
+export function clearCSRFToken() {
+  csrfToken = ''
+}
+
+export function csrfHeader(): Record<string, string> {
+  return csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
 }
 
 export function getDeviceFP(): string {
@@ -28,7 +41,10 @@ export async function api<T = any>(path: string, opts: RequestInit = {}): Promis
   headers.set('Content-Type', 'application/json')
   const token = getToken()
   if (token) headers.set('Authorization', `Bearer ${token}`)
-  const res = await fetch(path, { ...opts, headers })
+  if (csrfToken && opts.method && !['GET', 'HEAD', 'OPTIONS'].includes(opts.method.toUpperCase())) {
+    headers.set('X-CSRF-Token', csrfToken)
+  }
+  const res = await fetch(path, { credentials: 'same-origin', ...opts, headers })
   let body: any = {}
   try {
     body = await res.json()

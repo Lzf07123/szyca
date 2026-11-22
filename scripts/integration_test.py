@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import csv
+import http.cookiejar
 import io
 import json
 import os
@@ -20,10 +21,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BASE = os.environ.get("BASE_URL", "http://localhost:8091").rstrip("/")
 ADMIN = os.environ.get("ADMIN_PASSWORD", "integrity-test")
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "owner")
 PROJECT = os.environ.get("COMPOSE_PROJECT", "stpt-integrity-test")
 PG_USER = os.environ.get("POSTGRES_USER", "szyca")
 PG_DB = os.environ.get("POSTGRES_DB", "szyca")
 PG_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "szyca")
+ADMIN_COOKIE_JAR = http.cookiejar.CookieJar()
+ADMIN_OPENER = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(ADMIN_COOKIE_JAR))
+ADMIN_CSRF = ""
 
 
 def http(
@@ -95,6 +100,46 @@ def auth(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def admin_http(
+    method: str,
+    path: str,
+    body: object | None = None,
+    raw: bool = False,
+) -> tuple[int, object]:
+    data = None
+    headers = {"Origin": BASE}
+    if body is not None:
+        data = json.dumps(body).encode()
+        headers["Content-Type"] = "application/json"
+    if ADMIN_CSRF and method not in {"GET", "HEAD", "OPTIONS"}:
+        headers["X-CSRF-Token"] = ADMIN_CSRF
+    req = urllib.request.Request(BASE + path, data=data, headers=headers, method=method)
+    try:
+        with ADMIN_OPENER.open(req, timeout=10) as resp:
+            payload = resp.read()
+            status = resp.status
+    except urllib.error.HTTPError as exc:
+        payload = exc.read()
+        status = exc.code
+    if raw:
+        return status, payload.decode("utf-8-sig")
+    try:
+        return status, json.loads(payload or b"{}")
+    except json.JSONDecodeError:
+        return status, payload.decode(errors="replace")
+
+
+def admin_login() -> None:
+    global ADMIN_CSRF
+    status, payload = admin_http(
+        "POST",
+        "/api/admin/auth/login",
+        {"username": ADMIN_USERNAME, "password": ADMIN},
+    )
+    expect(status, payload, 200, "管理员登录")
+    ADMIN_CSRF = payload["csrf_token"]
+
+
 def correct_option(question_id: int, options: list[str]) -> str:
     value = psql(f"SELECT options->>answer FROM questions WHERE id = {question_id}")
     assert value, f"题目 {question_id} 不存在"
@@ -138,11 +183,17 @@ def check_ws_origin() -> None:
 
 def main() -> None:
     wait_ready()
-    admin = {"X-Admin-Token": ADMIN}
+    legacy_status, _ = http(
+        "GET",
+        "/api/admin/overview",
+        headers={"X-Admin-Token": ADMIN},
+    )
+    assert legacy_status == 401, "旧 X-Admin-Token 在迁移完成后仍可访问后台"
+    admin_login()
     nickname = "测试" + uuid.uuid4().hex[:8]
     device = "it-" + uuid.uuid4().hex
 
-    expect(*http("POST", "/api/admin/quiz-state", {"state": "start"}, admin), 200, "开始答题")
+    expect(*admin_http("POST", "/api/admin/quiz-state", {"state": "start"}), 200, "开始答题")
     session = expect(
         *http("POST", "/api/session", {"nickname": nickname, "device_fp": device}),
         200,
@@ -253,7 +304,7 @@ def main() -> None:
         f"排行榜得分 {row['score']} != {expected_score}（{nickname}）"
     )
 
-    status, exported = http("GET", "/api/admin/export/scores", headers=admin, raw=True)
+    status, exported = admin_http("GET", "/api/admin/export/scores", raw=True)
     assert status == 200
     csv_rows = list(csv.DictReader(io.StringIO(exported)))
     csv_row = next(r for r in csv_rows if r["昵称"] == nickname)
@@ -295,15 +346,17 @@ def main() -> None:
 
     for i in range(8):
         status, _ = http(
-            "GET",
-            "/api/admin/overview",
-            headers={"X-Admin-Token": "bad", "X-Forwarded-For": "203.0.113.250"},
+            "POST",
+            "/api/admin/auth/login",
+            {"username": "rate-limit-probe", "password": "wrong-password"},
+            headers={"Origin": BASE, "X-Forwarded-For": "203.0.113.250"},
         )
         assert status == 401, f"第 {i + 1} 次错误口令应返回 401"
     status, _ = http(
-        "GET",
-        "/api/admin/overview",
-        headers={"X-Admin-Token": "bad", "X-Forwarded-For": "203.0.113.250"},
+        "POST",
+        "/api/admin/auth/login",
+        {"username": "rate-limit-probe", "password": "wrong-password"},
+        headers={"Origin": BASE, "X-Forwarded-For": "203.0.113.250"},
     )
     assert status == 429, "后台连续错误口令未触发限流"
 
