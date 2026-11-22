@@ -1,8 +1,8 @@
 /*!
- * szyca · Digital Deep Space template v1.0.1
+ * szyca · Digital Deep Space template v1.0.2
  * Project-owned visual layer; no Li&Design submodule dependency.
  * Generated snapshot from frontend/src/cosmos.css
- * source-sha256: 8aed758d60a33805fabe9aef96796435e954778aeea50601671d48e0d2a7d32d
+ * source-sha256: e61ddc1db4f457f8cfba7fe4605de2f4e2e18188733c51315f584de5b0e435a4
  * Do not edit directly. Run scripts/export_design_template.py --write.
  */
 /* ================================================================
@@ -1009,26 +1009,15 @@ a {
   box-shadow: 0 0 12px var(--accent-primary);
 }
 
-.orbit-code {
+.orbit-status {
   align-self: center;
   margin: 0;
   color: var(--accent-primary);
   font-family: var(--font-display);
-  font-size: 23px;
-  font-weight: 500;
-  letter-spacing: -0.04em;
-}
-
-.orbit-logo {
-  position: relative;
-  z-index: 1;
-  align-self: center;
-  justify-self: center;
-  width: auto;
-  max-width: 62px;
-  max-height: 50px;
-  object-fit: contain;
-  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--accent-primary) 18%, transparent));
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 16px color-mix(in srgb, var(--accent-primary) 22%, transparent);
 }
 
 .signal-orbit small {
@@ -3061,14 +3050,9 @@ input[type="file"]::file-selector-button {
     inset: 13px;
   }
 
-  .orbit-code {
+  .orbit-status {
     margin: 0;
-    font-size: 18px;
-  }
-
-  .orbit-logo {
-    max-width: 46px;
-    max-height: 38px;
+    font-size: 15px;
   }
 
   .signal-orbit small {
