@@ -1,7 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
-import BrandMark from '../components/BrandMark'
 import PageMeta from '../components/PageMeta'
 import {
   useSite,
@@ -156,8 +155,8 @@ function Hero({
           </div>
         </div>
         <div className="signal-orbit" aria-hidden="true">
-          <BrandMark variant="orbit" />
-          <small>COMPUTER<br />ASSOCIATION</small>
+          <span className="orbit-status">LIVE</span>
+          <small>NETWORK<br />ONLINE</small>
         </div>
       </div>
     </section>

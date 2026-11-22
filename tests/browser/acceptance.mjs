@@ -318,7 +318,8 @@ async function assertRuntimeAndBrandAssets(page, label) {
     const runtime = await response.json()
     const headerLogo = document.querySelector('.logo-mark img')
     const footerLogo = document.querySelector('.footer-mark img')
-    const orbitLogo = document.querySelector('.signal-orbit .orbit-logo')
+    const orbitHasLogo = Boolean(document.querySelector('.signal-orbit img, .signal-orbit .orbit-logo'))
+    const orbitStatus = document.querySelector('.signal-orbit .orbit-status')?.textContent?.trim() ?? ''
     const uptime = document.querySelector('.hero-facts div:nth-child(3) dt')?.textContent?.trim() ?? ''
     const uptimeLabel = document.querySelector('.hero-facts div:nth-child(3) dd')?.textContent?.trim() ?? ''
     const logoStyle = headerLogo ? getComputedStyle(headerLogo) : null
@@ -329,7 +330,8 @@ async function assertRuntimeAndBrandAssets(page, label) {
       uptimeLabel,
       headerSrc: headerLogo?.getAttribute('src') ?? '',
       footerSrc: footerLogo?.getAttribute('src') ?? '',
-      orbitSrc: orbitLogo?.getAttribute('src') ?? '',
+      orbitHasLogo,
+      orbitStatus,
       logoBackground: logoStyle?.backgroundColor ?? '',
       logoBorder: logoStyle ? parseFloat(logoStyle.borderTopWidth) : null,
       logoPadding: logoStyle?.padding ?? '',
@@ -340,9 +342,10 @@ async function assertRuntimeAndBrandAssets(page, label) {
   expect(state.uptime !== '24h', `${label}: hero still uses the hard-coded 24h uptime`)
   expect(/^(--|\d+[dhm]\s?\d*[hm]?)$/.test(state.uptime), `${label}: unexpected uptime format ${state.uptime}`)
   expect(state.uptimeLabel.includes('UPTIME'), `${label}: uptime label is missing`)
+  expect(!state.orbitHasLogo, `${label}: Hero orbit must not render a brand logo`)
+  expect(state.orbitStatus === 'LIVE', `${label}: Hero orbit status readout missing`)
   if (state.headerSrc) {
     expect(state.footerSrc === state.headerSrc, `${label}: footer logo is not synchronized`)
-    expect(state.orbitSrc === state.headerSrc, `${label}: hero orbit logo is not synchronized`)
     expect(state.logoBackground === 'rgba(0, 0, 0, 0)', `${label}: header logo still has a background`)
     expect(state.logoBorder === 0, `${label}: header logo still has a border`)
     expect(state.logoPadding === '0px', `${label}: header logo still has padding`)

@@ -1002,26 +1002,15 @@ a {
   box-shadow: 0 0 12px var(--accent-primary);
 }
 
-.orbit-code {
+.orbit-status {
   align-self: center;
   margin: 0;
   color: var(--accent-primary);
   font-family: var(--font-display);
-  font-size: 23px;
-  font-weight: 500;
-  letter-spacing: -0.04em;
-}
-
-.orbit-logo {
-  position: relative;
-  z-index: 1;
-  align-self: center;
-  justify-self: center;
-  width: auto;
-  max-width: 62px;
-  max-height: 50px;
-  object-fit: contain;
-  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--accent-primary) 18%, transparent));
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 16px color-mix(in srgb, var(--accent-primary) 22%, transparent);
 }
 
 .signal-orbit small {
@@ -3054,14 +3043,9 @@ input[type="file"]::file-selector-button {
     inset: 13px;
   }
 
-  .orbit-code {
+  .orbit-status {
     margin: 0;
-    font-size: 18px;
-  }
-
-  .orbit-logo {
-    max-width: 46px;
-    max-height: 38px;
+    font-size: 15px;
   }
 
   .signal-orbit small {
