@@ -1,1 +1,0 @@
-site perf ok: 100 concurrent, P95=66.0ms P99=68.3ms median=55.5ms

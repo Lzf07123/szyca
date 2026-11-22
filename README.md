@@ -143,7 +143,7 @@ deploy/               单容器 Dockerfile + Compose + Nginx/Supervisor
 design-system/szyca/  BRAND + MASTER + 页面规则 + 项目自有深空模板
 docs/                 架构、API、后台、部署回滚与验收证据
 tests/browser/        Playwright + axe Docker 验收
-artifacts/browser/    14 档视口、模块开/关、抽奖和后台截图
+artifacts/            本地验收截图与报告（可再生成，不跟踪）
 ```
 
 ## 项目设计模板

@@ -1,1 +1,0 @@
-lottery ok: feature gate, eligibility, CSPRNG weighted draw, idempotency, same-user concurrency, claim, 100-user stock consistency, P99=75.4ms

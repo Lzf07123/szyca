@@ -53,8 +53,4 @@ python3 scripts/export_design_template.py --write
 python3 scripts/export_design_template.py --check
 ```
 
-参考截图：
-
-- [桌面首页](../../../artifacts/browser/screenshots/home-on-1440.jpg)
-- [移动首页](../../../artifacts/browser/screenshots/home-on-390.jpg)
-- [后台概览](../../../artifacts/browser/screenshots/admin-overview-390.jpg)
+参考截图和性能报告由浏览器验收脚本生成到本地 `artifacts/`；该目录可再生成，不进入源码仓库。

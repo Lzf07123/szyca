@@ -1,1 +1,0 @@
-backup restore ok: full /data archive restored to a new stack; PostgreSQL, uploads and readiness preserved (6799522 bytes)
