@@ -154,10 +154,7 @@ function Hero({
             <b>00:00:01</b>
           </div>
         </div>
-        <div className="signal-orbit" aria-hidden="true">
-          <span className="orbit-status">LIVE</span>
-          <small>NETWORK<br />ONLINE</small>
-        </div>
+        <div className="signal-orbit" aria-hidden="true" />
       </div>
     </section>
   )

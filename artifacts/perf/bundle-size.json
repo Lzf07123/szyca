@@ -19,12 +19,12 @@
   },
   "current": {
     "raw_bytes": 225480,
-    "gzip_bytes": 75070,
+    "gzip_bytes": 75073,
     "files": [
       {
-        "path": "/assets/index-DntnXfEV.js",
+        "path": "/assets/index-Dsi_mpYO.js",
         "raw_bytes": 18680,
-        "gzip_bytes": 7734
+        "gzip_bytes": 7737
       },
       {
         "path": "/assets/react-zJRiRjam.js",

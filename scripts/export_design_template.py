@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE_DIR = ROOT / "design-system/szyca/template"
 TOKEN_SOURCE = ROOT / "frontend/src/index.css"
 COMPONENT_SOURCE = ROOT / "frontend/src/cosmos.css"
-TEMPLATE_VERSION = "1.0.2"
+TEMPLATE_VERSION = "1.0.4"
 ALIAS_MARKER = "/* Backward-compatible aliases consumed by existing business pages. */"
 
 

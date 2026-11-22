@@ -971,13 +971,15 @@ a {
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--accent-primary) 26%, transparent);
   border-radius: 50%;
-  background:
-    radial-gradient(circle, color-mix(in srgb, var(--bg-900) 94%, transparent) 0 35%, transparent 36%),
-    conic-gradient(from 20deg, transparent 0 23%, color-mix(in srgb, var(--accent-primary) 60%, transparent) 24%, transparent 25% 64%, color-mix(in srgb, var(--accent-secondary) 56%, transparent) 65%, transparent 66%);
-  box-shadow: 0 0 32px color-mix(in srgb, var(--accent-primary) 10%, transparent);
-  grid-template-rows: 1fr auto;
-  gap: 1px;
-  padding: 20px 10px 14px;
+  background: conic-gradient(
+    from 20deg,
+    transparent 0 23%,
+    color-mix(in srgb, var(--accent-primary) 60%, transparent) 24%,
+    transparent 25% 64%,
+    color-mix(in srgb, var(--accent-secondary) 56%, transparent) 65%,
+    transparent 66%
+  );
+  box-shadow: none;
 }
 
 .signal-orbit::before,
@@ -1000,28 +1002,6 @@ a {
   height: 5px;
   background: var(--accent-primary);
   box-shadow: 0 0 12px var(--accent-primary);
-}
-
-.orbit-status {
-  align-self: center;
-  margin: 0;
-  color: var(--accent-primary);
-  font-family: var(--font-display);
-  font-size: 20px;
-  font-weight: 400;
-  letter-spacing: 0.08em;
-  text-shadow: 0 0 16px color-mix(in srgb, var(--accent-primary) 22%, transparent);
-}
-
-.signal-orbit small {
-  align-self: end;
-  margin: 0;
-  color: var(--text-tertiary);
-  font-family: var(--font-mono);
-  font-size: 5px;
-  line-height: 1.55;
-  letter-spacing: 0.1em;
-  text-align: center;
 }
 
 /* ---------- whoami ---------- */
@@ -3041,15 +3021,6 @@ input[type="file"]::file-selector-button {
 
   .signal-orbit::before {
     inset: 13px;
-  }
-
-  .orbit-status {
-    margin: 0;
-    font-size: 15px;
-  }
-
-  .signal-orbit small {
-    font-size: 4px;
   }
 
   .whoami-section,
