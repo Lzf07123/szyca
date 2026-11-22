@@ -18,12 +18,12 @@
 
 ```bash
 cp .env.example .env
-# 编辑 .env：QUIZ_IMAGE_REGISTRY + QUIZ_IMAGE 指向远程仓库，修改 ADMIN_PASSWORD
+# 编辑 .env：SZYCA_IMAGE_REGISTRY + SZYCA_IMAGE 指向远程仓库，修改 ADMIN_PASSWORD
 docker compose -f deploy/docker-compose.yml pull
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
-低配机器运行期只需要 `szyca` 一个镜像，不会拉取 PostgreSQL、Redis、Nginx 或 Node/Go 基础镜像；这些组件已内置。建议至少 1 GB 内存，生产库存放于 `szyca_quizdata` 单卷。
+低配机器运行期只需要镜像 `szyca:latest` 和容器 `szyca`，不会拉取 PostgreSQL、Redis、Nginx 或 Node/Go 基础镜像；这些组件已内置。建议至少 1 GB 内存，生产库存放于 `szyca_data` 单卷。
 
 | 入口 | 说明 |
 |---|---|
@@ -47,30 +47,30 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.build.yml u
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `ADMIN_PASSWORD` | admin123 | 后台口令（务必修改） |
-| `POSTGRES_PASSWORD` | quiz | 单容器内 PostgreSQL 口令（生产务必修改） |
+| `POSTGRES_PASSWORD` | szyca | 单容器内 PostgreSQL 口令（生产务必修改） |
 | `QUESTION_SECONDS` | 20 | 每题倒计时（秒） |
 | `ANSWER_GRACE_SECONDS` | 20 | 网络抖动/断线补交宽限（秒）；截止时间本身仍以服务端记录为准 |
 | `QUESTION_COUNT` | 10 | 每轮抽题数 |
 | `WEB_PORT` | 8080 | 对外端口 |
 | `WS_ALLOWED_ORIGINS` | （空） | 额外允许的 WebSocket Origin，逗号分隔；同源与本机开发默认允许 |
-| `QUIZ_IMAGE_REGISTRY` | （空） | 应用镜像仓库前缀，需以 `/` 结尾；独立于构建基础镜像 |
-| `QUIZ_IMAGE` | szyca:latest | 远程应用镜像名与 tag |
-| `QUIZ_PULL_POLICY` | missing | Compose 拉取策略；低配机可设 `always` |
+| `SZYCA_IMAGE_REGISTRY` | （空） | 应用镜像仓库前缀，需以 `/` 结尾；独立于构建基础镜像 |
+| `SZYCA_IMAGE` | szyca:latest | 远程应用镜像名与 tag |
+| `SZYCA_PULL_POLICY` | missing | Compose 拉取策略；低配机可设 `always` |
 
 ### 远程镜像与本地构建
 
 | 变量 | 默认 | 作用 |
 |---|---|---|
-| `QUIZ_IMAGE_REGISTRY` | （空） | 最终应用镜像 registry 前缀，与 `QUIZ_IMAGE` 拼接 |
+| `SZYCA_IMAGE_REGISTRY` | （空） | 最终应用镜像 registry 前缀，与 `SZYCA_IMAGE` 拼接 |
 | `BASE_IMAGE_REGISTRY` | （空） | 仅开发构建时替换 golang/node/alpine 基础镜像前缀 |
 | `SOURCE_MIRROR` | （空） | 软件源统一开关：空=官方源；`cn`=国内镜像组合（Go 走 goproxy.cn、npm 走 npmmirror、apk 走阿里云） |
 
 示例：远程私有仓库
 
 ```bash
-QUIZ_IMAGE_REGISTRY=registry.example.com/
-QUIZ_IMAGE=szyca:latest
-QUIZ_PULL_POLICY=always
+SZYCA_IMAGE_REGISTRY=registry.example.com/
+SZYCA_IMAGE=szyca:latest
+SZYCA_PULL_POLICY=always
 ```
 
 构建并推送镜像：
@@ -80,7 +80,7 @@ scripts/publish_image.sh          # 构建前可设置 BASE_IMAGE_REGISTRY / SOU
 scripts/publish_image.sh --push
 ```
 
-页脚/备案/二维码/背景图/站点 Logo 等运行期内容一律在后台配置，数据库与上传文件统一持久化在 `quizdata` 单卷。
+页脚/备案/二维码/背景图/站点 Logo 等运行期内容一律在后台配置，数据库与上传文件统一持久化在 `data` 单卷。
 
 ## 后台使用速查
 
@@ -126,7 +126,7 @@ docs/       实现方案
 - 已备案域名 + 外部反向代理：TLS 在外部反代终止，容器内 Nginx 只走 HTTP；**外部代理仍需透传 WebSocket Upgrade 头**（见 docs §8-§9）
 - 前端构建产物建议发布到 OSS+CDN（现场"进门一分钟"静态流量集中）
 - 上线前：`.env` 改强口令 → 后台录入真实题库/二维码/备案号 → 压测（§1.3 指标）→ 现场演练
-- 单容器只暴露 8080；PostgreSQL/Redis 仅监听容器回环地址。备份时复制 `szyca_quizdata` 卷即可同时保存数据库、Redis AOF 和上传文件。
+- 单容器只暴露 8080；PostgreSQL/Redis 仅监听容器回环地址。备份时复制 `szyca_data` 卷即可同时保存数据库、Redis AOF 和上传文件。
 
 ## 压测（k6）
 
@@ -136,7 +136,7 @@ WEB_PORT=8081 ADMIN_PASSWORD=loadtest docker compose -p stpt-loadtest \
   -f deploy/docker-compose.yml -f deploy/docker-compose.build.yml up -d --build
 curl -X POST http://localhost:8081/api/admin/quiz-state -H 'Content-Type: application/json' -H 'X-Admin-Token: loadtest' -d '{"state":"start"}'
 # 运行（400 VU：150 答题全流程 + 200 排行轮询 + 50 WebSocket）
-docker run --rm -i --network stpt-loadtest_default -e BASE_URL=http://quiz:8080 grafana/k6 run - < loadtest/k6-loadtest.js
+docker run --rm -i --network stpt-loadtest_default -e BASE_URL=http://szyca:8080 grafana/k6 run - < loadtest/k6-loadtest.js
 docker compose -p stpt-loadtest -f deploy/docker-compose.yml down -v
 ```
 
@@ -146,7 +146,7 @@ docker compose -p stpt-loadtest -f deploy/docker-compose.yml down -v
 
 - 前端热更：`cd frontend && npm run dev`（已配代理到 :8080；仅开发环境使用，不污染部署）
 - 改代码后：`docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.build.yml up -d --build`
-- 查看日志：`docker compose -f deploy/docker-compose.yml logs -f quiz`
+- 查看日志：`docker logs -f szyca`
 
 ## 自动化回归（Docker 隔离栈）
 

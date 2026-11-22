@@ -1,5 +1,5 @@
 services:
-  quiz:
+  szyca:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
