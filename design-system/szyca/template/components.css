@@ -1,8 +1,8 @@
 /*!
- * szyca · Digital Deep Space template v1.0.0
+ * szyca · Digital Deep Space template v1.0.1
  * Project-owned visual layer; no Li&Design submodule dependency.
  * Generated snapshot from frontend/src/cosmos.css
- * source-sha256: 7d79ab173afb18d02983dda39860808cbcffcbdcc0ee13bac7cf947d7730b5fa
+ * source-sha256: 8aed758d60a33805fabe9aef96796435e954778aeea50601671d48e0d2a7d32d
  * Do not edit directly. Run scripts/export_design_template.py --write.
  */
 /* ================================================================
@@ -202,14 +202,14 @@ a {
 }
 
 .public-topbar .logo img {
-  height: 38px;
+  height: 42px;
   max-width: 150px;
-  padding: 4px 8px;
-  border: 1px solid var(--line-subtle);
-  border-radius: 10px;
-  background: var(--surface-glass);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   object-fit: contain;
-  box-shadow: none;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent-primary) 15%, transparent));
 }
 
 .logo-mark,
@@ -264,6 +264,36 @@ a {
   font-size: 7px;
   font-weight: 700;
   letter-spacing: -0.08em;
+}
+
+.logo-mark.has-img,
+.footer-mark.has-img {
+  width: auto;
+  min-width: 36px;
+  height: 42px;
+  overflow: visible;
+}
+
+.logo-mark.has-img::before,
+.logo-mark.has-img::after,
+.footer-mark.has-img::before,
+.footer-mark.has-img::after {
+  display: none;
+}
+
+.logo-mark.has-img img,
+.footer-mark.has-img img {
+  display: block;
+  width: auto;
+  max-width: 132px;
+  height: 42px;
+  max-height: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  object-fit: contain;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent-primary) 15%, transparent));
 }
 
 .logo-copy {
@@ -952,6 +982,9 @@ a {
     radial-gradient(circle, color-mix(in srgb, var(--bg-900) 94%, transparent) 0 35%, transparent 36%),
     conic-gradient(from 20deg, transparent 0 23%, color-mix(in srgb, var(--accent-primary) 60%, transparent) 24%, transparent 25% 64%, color-mix(in srgb, var(--accent-secondary) 56%, transparent) 65%, transparent 66%);
   box-shadow: 0 0 32px color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  grid-template-rows: 1fr auto;
+  gap: 1px;
+  padding: 20px 10px 14px;
 }
 
 .signal-orbit::before,
@@ -977,8 +1010,8 @@ a {
 }
 
 .orbit-code {
-  align-self: end;
-  margin-bottom: 43px;
+  align-self: center;
+  margin: 0;
   color: var(--accent-primary);
   font-family: var(--font-display);
   font-size: 23px;
@@ -986,9 +1019,21 @@ a {
   letter-spacing: -0.04em;
 }
 
+.orbit-logo {
+  position: relative;
+  z-index: 1;
+  align-self: center;
+  justify-self: center;
+  width: auto;
+  max-width: 62px;
+  max-height: 50px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--accent-primary) 18%, transparent));
+}
+
 .signal-orbit small {
-  align-self: start;
-  margin-top: 4px;
+  align-self: end;
+  margin: 0;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
   font-size: 5px;
@@ -1827,6 +1872,16 @@ input[type="file"]::file-selector-button {
 .footer-mark {
   width: 34px;
   height: 34px;
+}
+
+.footer-mark.has-img {
+  height: 36px;
+}
+
+.footer-mark.has-img img {
+  max-width: 116px;
+  height: 36px;
+  max-height: 36px;
 }
 
 .footer-brand strong {
@@ -3007,8 +3062,13 @@ input[type="file"]::file-selector-button {
   }
 
   .orbit-code {
-    margin-bottom: 31px;
+    margin: 0;
     font-size: 18px;
+  }
+
+  .orbit-logo {
+    max-width: 46px;
+    max-height: 38px;
   }
 
   .signal-orbit small {
