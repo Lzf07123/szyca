@@ -4,7 +4,7 @@ import (
 	"slices"
 	"testing"
 
-	"stpt/quiz/internal/store"
+	"szyca/internal/store"
 )
 
 func TestOrderedOptionsDeterministic(t *testing.T) {

@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"stpt/quiz/internal/publish"
-	"stpt/quiz/internal/rank"
-	"stpt/quiz/internal/store"
+	"szyca/internal/publish"
+	"szyca/internal/rank"
+	"szyca/internal/store"
 )
 
 var (
@@ -48,6 +48,17 @@ func New(st *store.Store, rk *rank.Rank, pub *publish.Pub, title string, questio
 }
 
 func (s *Service) Title() string { return s.title }
+
+// Ready 表示 PostgreSQL 与 Redis 均已就绪，供容器编排健康检查使用。
+func (s *Service) Ready(ctx context.Context) error {
+	if err := s.store.Ping(ctx); err != nil {
+		return fmt.Errorf("postgres: %w", err)
+	}
+	if err := s.rank.Ping(ctx); err != nil {
+		return fmt.Errorf("redis: %w", err)
+	}
+	return nil
+}
 
 // ---------- session ----------
 

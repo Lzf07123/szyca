@@ -22,10 +22,10 @@ import (
 	"sync"
 	"time"
 
-	"stpt/quiz/internal/config"
-	"stpt/quiz/internal/quiz"
-	"stpt/quiz/internal/store"
-	"stpt/quiz/internal/ws"
+	"szyca/internal/config"
+	"szyca/internal/quiz"
+	"szyca/internal/store"
+	"szyca/internal/ws"
 )
 
 type Server struct {
@@ -49,6 +49,15 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	})
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := s.svc.Ready(ctx); err != nil {
+			writeErr(w, http.StatusServiceUnavailable, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
 
 	// 公开

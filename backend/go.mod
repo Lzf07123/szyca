@@ -1,4 +1,4 @@
-module stpt/quiz
+module szyca
 
 go 1.22
 
