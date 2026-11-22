@@ -6,7 +6,7 @@ const BASE = process.env.BASE_URL || 'http://localhost:8091'
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'owner'
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'integrity-test'
 const ARTIFACTS = process.env.ARTIFACT_DIR || '/artifacts/browser'
-const widths = [320, 390, 768, 1024, 1280, 1440]
+const widths = [320, 360, 390, 414, 480, 600, 768, 820, 900, 1024, 1180, 1280, 1440, 1920]
 const errors = []
 
 await fs.mkdir(`${ARTIFACTS}/screenshots`, { recursive: true })
@@ -151,6 +151,56 @@ async function assertTouchTargets(page, label) {
   expect(small.length === 0, `${label}: undersized targets ${JSON.stringify(small)}`)
 }
 
+async function assertReadableText(page, label) {
+  const issues = await page.evaluate(() => {
+    const selectors = [
+      '.hero-copy',
+      '.hero-title-line',
+      '.home-section h2',
+      '.section-heading > div',
+      '.action-section > div',
+      '.activity-card',
+      '.join-head',
+      '.lottery-copy',
+      '.public-footer .footer-brand',
+      '.lottery-card',
+      '.quiz-wrap',
+      '.state-page h1',
+      '.screen-head',
+      '.srow',
+      '.admin-top',
+      '.panel-head',
+    ]
+    return Array.from(document.querySelectorAll(selectors.join(',')))
+      .filter((element) => {
+        const style = getComputedStyle(element)
+        const rect = element.getBoundingClientRect()
+        return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0
+      })
+      .map((element) => {
+        const style = getComputedStyle(element)
+        const rect = element.getBoundingClientRect()
+        const text = element.textContent?.trim() ?? ''
+        return {
+          selector: element.className || element.tagName.toLowerCase(),
+          text: text.slice(0, 40),
+          width: Math.round(rect.width),
+          writingMode: style.writingMode,
+          wordBreak: style.wordBreak,
+          clipped: ['hidden', 'clip'].includes(style.overflowY) && element.scrollHeight > element.clientHeight + 2,
+          narrowText: text.length > 12 && rect.width < 160,
+        }
+      })
+      .filter((item) =>
+        item.writingMode !== 'horizontal-tb'
+        || item.wordBreak === 'break-all'
+        || item.clipped
+        || item.narrowText
+      )
+  })
+  expect(issues.length === 0, `${label}: distorted text ${JSON.stringify(issues)}`)
+}
+
 async function axeCheck(page, label) {
   await page.addScriptTag({ content: axe.source })
   const result = await page.evaluate(async () => {
@@ -189,6 +239,7 @@ async function main() {
       expect(siteRequests === 1, `home-off-${width}: /api/site requested ${siteRequests} times`)
       await assertNoOverflow(page, `home-off-${width}`)
       await assertTouchTargets(page, `home-off-${width}`)
+      await assertReadableText(page, `home-off-${width}`)
       await page.screenshot({ path: `${ARTIFACTS}/screenshots/home-off-${width}.jpg`, fullPage: true, type: 'jpeg', quality: 78 })
       if (width === 320) {
         await page.getByRole('button', { name: '打开导航' }).click()
@@ -210,6 +261,7 @@ async function main() {
       await attachDiagnostics(page, `home-on-${width}`)
       await page.goto(BASE + '/', { waitUntil: 'networkidle' })
       await assertNoOverflow(page, `home-on-${width}`)
+      await assertReadableText(page, `home-on-${width}`)
       expect(await page.locator('#site-navigation a[href="/lottery"]').count() === 1, `home-on-${width}: lottery nav missing`)
       expect(await page.locator('#lottery').count() === 1, `home-on-${width}: lottery section missing`)
       await page.screenshot({ path: `${ARTIFACTS}/screenshots/home-on-${width}.jpg`, fullPage: true, type: 'jpeg', quality: 78 })
@@ -223,23 +275,50 @@ async function main() {
       ['/lottery', '招新抽奖 · 计算机协会'],
       ['/not-a-page', '页面不存在 · 计算机协会'],
     ]
+    const routeWidths = [320, 390, 768, 1024, 1440]
     const titles = new Set()
-    for (const [path, expected] of pages) {
-      const context = await browser.newContext({ viewport: { width: 390, height: 844 } })
-      const page = await context.newPage()
-      await attachDiagnostics(page, `route-${path}`)
-      await page.goto(BASE + path, { waitUntil: 'networkidle' })
-      const title = await page.title()
-      expect(title === expected, `${path}: title ${title} != ${expected}`)
-      titles.add(title)
-      await assertNoOverflow(page, `route-${path}`)
-      if (path === '/lottery') {
-        await page.screenshot({ path: `${ARTIFACTS}/screenshots/lottery-on-390.jpg`, fullPage: true, type: 'jpeg', quality: 82 })
-        await axeCheck(page, 'lottery')
+    for (const width of routeWidths) {
+      for (const [path, expected] of pages) {
+        const label = `route-${path}-${width}`
+        const context = await browser.newContext({ viewport: { width, height: width <= 390 ? 844 : 900 } })
+        const page = await context.newPage()
+        await attachDiagnostics(page, label)
+        await page.goto(BASE + path, { waitUntil: 'networkidle' })
+        const title = await page.title()
+        expect(title === expected, `${label}: title ${title} != ${expected}`)
+        titles.add(title)
+        await assertNoOverflow(page, label)
+        await assertReadableText(page, label)
+        if (path === '/lottery' && [390, 768, 1440].includes(width)) {
+          await page.screenshot({
+            path: `${ARTIFACTS}/screenshots/lottery-on-${width}.jpg`,
+            fullPage: true,
+            type: 'jpeg',
+            quality: 82,
+          })
+        }
+        if (path === '/lottery' && width === 390) {
+          await axeCheck(page, 'lottery')
+        }
+        await context.close()
       }
-      await context.close()
     }
     expect(titles.size === pages.length, 'public page titles are not unique')
+
+    const landscapeContext = await browser.newContext({ viewport: { width: 844, height: 390 } })
+    const landscapePage = await landscapeContext.newPage()
+    await attachDiagnostics(landscapePage, 'home-landscape-844x390')
+    await landscapePage.goto(BASE + '/', { waitUntil: 'networkidle' })
+    await assertNoOverflow(landscapePage, 'home-landscape-844x390')
+    await assertTouchTargets(landscapePage, 'home-landscape-844x390')
+    await assertReadableText(landscapePage, 'home-landscape-844x390')
+    await landscapePage.screenshot({
+      path: `${ARTIFACTS}/screenshots/home-landscape-844x390.jpg`,
+      fullPage: true,
+      type: 'jpeg',
+      quality: 78,
+    })
+    await landscapeContext.close()
 
     await setLottery(admin, false)
     const offContext = await browser.newContext({ viewport: { width: 390, height: 844 } })
@@ -260,6 +339,7 @@ async function main() {
     await adminPage.getByRole('button', { name: '抽奖' }).click()
     await adminPage.getByText('抽奖总开关').waitFor({ state: 'visible' })
     await assertNoOverflow(adminPage, 'admin-lottery')
+    await assertReadableText(adminPage, 'admin-lottery')
     const storage = await adminPage.evaluate(() => ({
       local: JSON.stringify(window.localStorage),
       session: JSON.stringify(window.sessionStorage),
@@ -301,7 +381,7 @@ async function main() {
       (message) => !(message.startsWith('site-fallback: console Failed to load resource') && message.includes('ERR_FAILED')),
     )
     expect(unexpectedErrors.length === 0, `browser diagnostics:\n${unexpectedErrors.join('\n')}`)
-    console.log(`browser ok: ${widths.length} viewports x 2 module states, routes, axe, keyboard, fallback, reduced motion; campaign ${campaignID}`)
+    console.log(`browser ok: ${widths.length} viewports x 2 module states + landscape, routes at ${routeWidths.length} widths, axe, keyboard, fallback, reduced motion; campaign ${campaignID}`)
   } finally {
     await browser.close()
     await setLotterySection(admin, originalLotterySection)
