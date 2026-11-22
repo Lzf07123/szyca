@@ -1,1 +1,1 @@
-browser ok: 6 viewports x 2 module states, routes, axe, keyboard, fallback, reduced motion; campaign 7
+browser ok: 6 viewports x 2 module states, routes, axe, keyboard, fallback, reduced motion; campaign 4

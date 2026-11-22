@@ -21,16 +21,16 @@ dist/assets/press-start-2p-latin-ext-400-normal-DpfYvR5A.woff2       9.86 kB
 dist/assets/press-start-2p-latin-400-normal-_wFEWmAB.woff2          12.51 kB
 dist/assets/vt323-latin-ext-400-normal-iUdYUaX4.woff2               16.37 kB
 dist/assets/vt323-latin-400-normal-wDgJuOC9.woff2                   17.94 kB
-dist/assets/index-B2bAi2X4.css                                      67.63 kB │ gzip: 22.00 kB
-dist/assets/Join-B0z6iv4Q.js                                         0.94 kB │ gzip:  0.71 kB
+dist/assets/index-BQQJg_Hp.css                                      81.61 kB │ gzip: 24.05 kB
+dist/assets/Join-aC9Fv2fn.js                                         0.94 kB │ gzip:  0.71 kB
 dist/assets/socket-EYWjRbI0.js                                       1.45 kB │ gzip:  0.63 kB
-dist/assets/Result-CDPHU0nG.js                                       1.73 kB │ gzip:  1.01 kB
-dist/assets/Screen-BHQ4Z_q4.js                                       2.73 kB │ gzip:  1.33 kB
-dist/assets/Lottery-BKmsUkZb.js                                      4.09 kB │ gzip:  2.35 kB
-dist/assets/Quiz-pRlugUeF.js                                        12.75 kB │ gzip:  4.84 kB
-dist/assets/index-D26GyzTi.js                                       12.98 kB │ gzip:  6.14 kB
-dist/assets/Admin-DkJ-Jp29.js                                       42.74 kB │ gzip: 12.39 kB
-dist/assets/Home-CXej62u0.js                                       155.47 kB │ gzip: 45.03 kB
+dist/assets/Result-DSaAqxt4.js                                       1.73 kB │ gzip:  1.01 kB
+dist/assets/Screen-BNT8OF3G.js                                       2.73 kB │ gzip:  1.33 kB
+dist/assets/Lottery-D165TKtN.js                                      4.09 kB │ gzip:  2.35 kB
+dist/assets/Quiz-lTss8Zds.js                                        12.75 kB │ gzip:  4.84 kB
+dist/assets/index-Bzs-MYZT.js                                       12.98 kB │ gzip:  6.14 kB
+dist/assets/Admin-DL4j4xjC.js                                       42.74 kB │ gzip: 12.39 kB
+dist/assets/Home-CIzOW1Hi.js                                       155.67 kB │ gzip: 45.09 kB
 dist/assets/react-zJRiRjam.js                                      206.80 kB │ gzip: 67.46 kB
 ✓ built in 1.64s
 npm notice
