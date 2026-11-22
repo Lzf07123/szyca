@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,10 +10,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-)
 
-//go:embed schema.sql
-var schemaSQL string
+	"szyca/internal/platform/migrate"
+)
 
 var (
 	ErrNotFound             = errors.New("not found")
@@ -106,9 +104,9 @@ func Open(ctx context.Context, dsn string, maxConns int) (*Store, error) {
 		pool.Close()
 		return nil, err
 	}
-	if _, err := pool.Exec(ctx, schemaSQL); err != nil {
+	if err := migrate.Run(ctx, pool); err != nil {
 		pool.Close()
-		return nil, fmt.Errorf("apply schema: %w", err)
+		return nil, fmt.Errorf("apply migrations: %w", err)
 	}
 	s := &Store{pool: pool}
 	if err := s.seedQuestions(ctx); err != nil {
@@ -119,6 +117,10 @@ func Open(ctx context.Context, dsn string, maxConns int) (*Store, error) {
 }
 
 func (s *Store) Close() { s.pool.Close() }
+
+// Pool exposes the shared connection pool to domain services. Store remains the
+// owner of lifecycle and migrations; business modules own their own tables.
+func (s *Store) Pool() *pgxpool.Pool { return s.pool }
 
 // ---------- users ----------
 

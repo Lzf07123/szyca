@@ -1,3 +1,6 @@
+-- Version 0001: legacy quiz schema and compatibility hardening.
+-- Existing installations have these objects already; every statement remains
+-- idempotent so the baseline can also bootstrap a brand-new database.
 CREATE TABLE IF NOT EXISTS users (
     id            BIGSERIAL PRIMARY KEY,
     nickname      TEXT NOT NULL,
