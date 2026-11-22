@@ -12,12 +12,14 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"stpt/quiz/internal/config"
@@ -31,10 +33,15 @@ type Server struct {
 	svc       *quiz.Service
 	hub       *ws.Hub
 	startedAt time.Time
+	adminMu   sync.Mutex
+	adminFail map[string]adminFailure
 }
 
 func New(cfg config.Config, svc *quiz.Service, hub *ws.Hub) *Server {
-	return &Server{cfg: cfg, svc: svc, hub: hub, startedAt: time.Now()}
+	return &Server{
+		cfg: cfg, svc: svc, hub: hub, startedAt: time.Now(),
+		adminFail: make(map[string]adminFailure),
+	}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -62,7 +69,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/me", s.withUser(s.handleMe))
 
 	// WebSocket（可匿名=大屏）
-	mux.HandleFunc("GET /ws", ws.Serve(s.hub, s.validateToken))
+	mux.HandleFunc("GET /ws", ws.Serve(s.hub, s.validateToken, s.cfg.WSAllowedOrigins))
 
 	// 后台（X-Admin-Token）
 	mux.HandleFunc("POST /api/admin/quiz-state", s.withAdmin(s.handleAdminState))
@@ -135,14 +142,78 @@ func (s *Server) withUser(next userHandler) http.HandlerFunc {
 
 func (s *Server) withAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ip := clientIP(r)
+		if !s.adminAllowed(ip) {
+			w.Header().Set("Retry-After", "300")
+			writeErr(w, http.StatusTooManyRequests, "后台口令尝试过多，请 5 分钟后重试")
+			return
+		}
 		got := r.Header.Get("X-Admin-Token")
 		want := s.cfg.AdminPassword
 		if got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {
+			s.recordAdminFailure(ip)
 			writeErr(w, http.StatusUnauthorized, "后台口令错误")
 			return
 		}
+		s.clearAdminFailures(ip)
 		next(w, r)
 	}
+}
+
+type adminFailure struct {
+	Count int
+	Since time.Time
+}
+
+const (
+	adminWindow      = 5 * time.Minute
+	adminMaxFailures = 8
+)
+
+func (s *Server) adminAllowed(ip string) bool {
+	s.adminMu.Lock()
+	defer s.adminMu.Unlock()
+	entry, ok := s.adminFail[ip]
+	if !ok || time.Since(entry.Since) >= adminWindow {
+		delete(s.adminFail, ip)
+		return true
+	}
+	return entry.Count < adminMaxFailures
+}
+
+func (s *Server) recordAdminFailure(ip string) {
+	s.adminMu.Lock()
+	defer s.adminMu.Unlock()
+	now := time.Now()
+	for key, entry := range s.adminFail {
+		if now.Sub(entry.Since) >= adminWindow {
+			delete(s.adminFail, key)
+		}
+	}
+	entry := s.adminFail[ip]
+	if entry.Since.IsZero() || now.Sub(entry.Since) >= adminWindow {
+		entry = adminFailure{Since: now}
+	}
+	entry.Count++
+	s.adminFail[ip] = entry
+}
+
+func (s *Server) clearAdminFailures(ip string) {
+	s.adminMu.Lock()
+	delete(s.adminFail, ip)
+	s.adminMu.Unlock()
+}
+
+func clientIP(r *http.Request) string {
+	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+		if ip := strings.TrimSpace(strings.Split(forwarded, ",")[0]); ip != "" {
+			return ip
+		}
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
 
 func withCORS(next http.Handler) http.Handler {
@@ -293,9 +364,9 @@ func (s *Server) handleStartRound(w http.ResponseWriter, r *http.Request, u *sto
 	if req.Difficulty == "" {
 		req.Difficulty = "全部"
 	}
-	roundNo, qs, err := s.svc.StartRound(r.Context(), u.ID, req.Difficulty, s.quizLimit())
+	roundNo, qs, deadline, err := s.svc.StartRound(r.Context(), u.ID, req.Difficulty, s.quizLimit())
 	if err != nil {
-		if errors.Is(err, quiz.ErrBadRequest) {
+		if errors.Is(err, quiz.ErrBadRequest) || errors.Is(err, quiz.ErrNoQuestions) {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -303,9 +374,10 @@ func (s *Server) handleStartRound(w http.ResponseWriter, r *http.Request, u *sto
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"round_no":         roundNo,
-		"questions":        qs,
-		"question_seconds": s.cfg.QuestionSeconds,
+		"round_no":          roundNo,
+		"questions":         qs,
+		"question_seconds":  s.cfg.QuestionSeconds,
+		"question_deadline": deadline,
 	})
 }
 
@@ -319,7 +391,7 @@ func (s *Server) handleAbandonRound(w http.ResponseWriter, r *http.Request, u *s
 }
 
 func (s *Server) handleCurrentRound(w http.ResponseWriter, r *http.Request, u *store.User) {
-	roundNo, qs, answered, err := s.svc.CurrentRound(r.Context(), u.ID, s.quizLimit())
+	roundNo, qs, answered, deadline, err := s.svc.CurrentRound(r.Context(), u.ID)
 	if errors.Is(err, quiz.ErrNoRound) {
 		writeErr(w, http.StatusNotFound, err.Error())
 		return
@@ -329,10 +401,11 @@ func (s *Server) handleCurrentRound(w http.ResponseWriter, r *http.Request, u *s
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"round_no":         roundNo,
-		"questions":        qs,
-		"question_seconds": s.cfg.QuestionSeconds,
-		"answered":         answered,
+		"round_no":          roundNo,
+		"questions":         qs,
+		"question_seconds":  s.cfg.QuestionSeconds,
+		"question_deadline": deadline,
+		"answered":          answered,
 	})
 }
 
@@ -346,7 +419,7 @@ func (s *Server) handleAnswer(w http.ResponseWriter, r *http.Request, u *store.U
 		writeErr(w, http.StatusBadRequest, "请求体格式错误")
 		return
 	}
-	att, correctIdx, duplicate, err := s.svc.Submit(r.Context(), u.ID, req.RequestID, req.QuestionID, req.Selected)
+	att, correctIdx, duplicate, nextDeadline, err := s.svc.Submit(r.Context(), u.ID, req.RequestID, req.QuestionID, req.Selected)
 	switch {
 	case errors.Is(err, quiz.ErrQuizNotStarted):
 		writeErr(w, http.StatusConflict, err.Error())
@@ -355,6 +428,12 @@ func (s *Server) handleAnswer(w http.ResponseWriter, r *http.Request, u *store.U
 		writeErr(w, http.StatusConflict, err.Error())
 		return
 	case errors.Is(err, quiz.ErrQuestionClosed):
+		writeErr(w, http.StatusGone, err.Error())
+		return
+	case errors.Is(err, quiz.ErrQuestionOrder), errors.Is(err, quiz.ErrQuestionTaken):
+		writeErr(w, http.StatusConflict, err.Error())
+		return
+	case errors.Is(err, quiz.ErrQuestionExpired):
 		writeErr(w, http.StatusGone, err.Error())
 		return
 	case errors.Is(err, quiz.ErrBadRequest):
@@ -373,6 +452,7 @@ func (s *Server) handleAnswer(w http.ResponseWriter, r *http.Request, u *store.U
 		"score":          att.Score,
 		"request_id":     att.RequestID,
 		"duplicate":      duplicate,
+		"next_deadline":  nextDeadline,
 	})
 }
 
@@ -785,7 +865,7 @@ func (s *Server) handleAdminClearBackgrounds(w http.ResponseWriter, r *http.Requ
 		s.removeUploadFile(p)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ok":                   "true",
+		"ok":                  "true",
 		"backgrounds_deleted": len(paths),
 	})
 }

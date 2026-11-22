@@ -83,8 +83,8 @@ export async function flushPending(): Promise<number> {
       ok++
     } catch (e) {
       const err = e as Error & { status?: number }
-      // 身份已失效（token 401）：缓存的答案永远无法提交，丢弃；其余错误保留重试
-      if (err.status === 401) continue
+      // 4xx 表示答案已过期、题序变化或身份失效，继续重试不会成功；只保留瞬时网络/服务端错误。
+      if (err.status && err.status >= 400 && err.status < 500 && err.status !== 429) continue
       rest.push(a)
     }
   }

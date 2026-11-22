@@ -9,6 +9,7 @@ interface Entry {
   nickname: string
   correct: number
   elapsed_ms: number
+  score: number
 }
 
 interface Stats {
@@ -113,7 +114,7 @@ export default function Screen() {
         )}
         <span>参与答题 <b>{stats.participants}</b> 人</span>
         <span>累计答题 <b>{stats.attempts}</b> 次</span>
-        <span>在线人次 <b>{stats.online}</b></span>
+        <span>在线连接 <b>{stats.online}</b></span>
       </div>
 
       {announce && <div className="announce-banner"><span>{announce}</span></div>}
@@ -124,7 +125,7 @@ export default function Screen() {
             <span className="srank">{i + 1}</span>
             <span className="sname" title={e.nickname}>{e.nickname}</span>
             <span className="sdetail">
-              {e.correct} 题 · {(e.elapsed_ms / 1000).toFixed(0)}s
+              {e.score} 分 · {e.correct} 题 · {(e.elapsed_ms / 1000).toFixed(0)}s
             </span>
           </li>
         ))}

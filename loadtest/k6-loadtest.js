@@ -30,7 +30,8 @@ function auth(tok) {
 }
 
 export function quizFlow() {
-  const uid = `${__VU}-${__ITER}`
+  // 每个 VU 模拟一名固定现场用户，多轮答题复用身份，避免把“注册压力”误当成“答题压力”。
+  const uid = `${__VU}`
   let r = http.post(`${BASE}/api/session`,
     JSON.stringify({ nickname: `压${uid}`.slice(0, 16), device_fp: `k6-fp-${uid}` }),
     { headers: { 'Content-Type': 'application/json' } })
@@ -46,7 +47,7 @@ export function quizFlow() {
 
   for (const q of qs) {
     const a = http.post(`${BASE}/api/answer`,
-      JSON.stringify({ request_id: `k6-${uid}-${q.id}`, question_id: q.id, selected: 0 }),
+      JSON.stringify({ request_id: `k6-${uid}-${__ITER}-${q.id}`, question_id: q.id, selected: 0 }),
       { headers: auth(tok), tags: { name: 'answer' } })
     check(a, { 'answer 200': (x) => x.status === 200 })
   }

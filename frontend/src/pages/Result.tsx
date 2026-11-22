@@ -18,6 +18,7 @@ interface Entry {
   nickname: string
   correct: number
   elapsed_ms: number
+  score: number
 }
 
 export default function Result() {
@@ -63,7 +64,7 @@ export default function Result() {
           最佳成绩：答对 {me.correct} / {me.answered} 题 · 用时 {fmt(me.elapsed_ms)}
         </p>
         <p className="rank-line">
-          当前排名 <b>{me.rank > 0 ? `第 ${me.rank} 名` : '未上榜'}</b> / 共 {me.total} 人参与
+          当前排名 <b>{me.rank > 0 ? `第 ${me.rank} 名` : '未上榜'}</b> / 共 {me.total} 个答题身份
         </p>
         <button className="btn" onClick={() => nav('/quiz')}>
           再来一轮（保留最佳成绩）
@@ -78,7 +79,7 @@ export default function Result() {
               <span className={`rank-no no${i + 1}`}>{i + 1}</span>
               <span className="rank-name" title={e.nickname}>{e.nickname}</span>
               <span className="rank-detail">
-                {e.correct} 题 · {fmt(e.elapsed_ms)}
+                {e.score} 分 · {e.correct} 题 · {fmt(e.elapsed_ms)}
               </span>
             </li>
           ))}

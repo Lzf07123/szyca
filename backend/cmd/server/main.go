@@ -45,7 +45,7 @@ func main() {
 		log.Fatalf("site defaults: %v", err)
 	}
 
-	svc := quiz.New(st, rk, pub, cfg.Title)
+	svc := quiz.New(st, rk, pub, cfg.Title, cfg.QuestionSeconds, cfg.AnswerGraceSeconds)
 	svc.StartLeaderboardRefresh(ctx)
 	hub := ws.NewHub(svc, pub.Subscribe(ctx)) // 排行榜改走 DB 全量排名
 	go hub.Run(ctx)
