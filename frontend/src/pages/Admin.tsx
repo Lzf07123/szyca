@@ -109,10 +109,15 @@ export default function Admin() {
 
   const checkSession = useCallback(async () => {
     try {
-      const data = await api<{ account: AdminAccount; csrf_token: string }>('/api/admin/auth/me')
-      setAccount(data.account)
-      setCSRFToken(data.csrf_token)
-      setMsg('')
+      const data = await api<{ account: AdminAccount | null; csrf_token: string }>('/api/admin/auth/status')
+      if (data.account) {
+        setAccount(data.account)
+        setCSRFToken(data.csrf_token)
+        setMsg('')
+      } else {
+        setAccount(null)
+        clearCSRFToken()
+      }
     } catch {
       setAccount(null)
       clearCSRFToken()

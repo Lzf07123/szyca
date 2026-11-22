@@ -1,0 +1,39 @@
+{
+  "baseline_commit": "67e25fe",
+  "current_image": "szyca:release-test",
+  "baseline": {
+    "raw_bytes": 406782,
+    "gzip_bytes": 125099,
+    "files": [
+      {
+        "path": "/assets/index-DdLHADTX.js",
+        "raw_bytes": 201514,
+        "gzip_bytes": 58278
+      },
+      {
+        "path": "/assets/react-DZvyftjZ.js",
+        "raw_bytes": 205268,
+        "gzip_bytes": 66821
+      }
+    ]
+  },
+  "current": {
+    "raw_bytes": 221042,
+    "gzip_bytes": 73394,
+    "files": [
+      {
+        "path": "/assets/index-D26GyzTi.js",
+        "raw_bytes": 14242,
+        "gzip_bytes": 6058
+      },
+      {
+        "path": "/assets/react-zJRiRjam.js",
+        "raw_bytes": 206800,
+        "gzip_bytes": 67336
+      }
+    ]
+  },
+  "raw_growth_percent": -45.66082078361383,
+  "criterion": "initial JS growth <= 10%",
+  "passed": true
+}

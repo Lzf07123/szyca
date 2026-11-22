@@ -10,8 +10,11 @@ import ws from 'k6/ws'
 
 const BASE = __ENV.BASE_URL || 'http://host.docker.internal:8081'
 const WS_BASE = BASE.replace('http', 'ws')
+const RUN_ID = `${Date.now()}-${Math.random().toString(16).slice(2)}`
+const SUMMARY_PATH = __ENV.SUMMARY_PATH || '/out/k6-summary.json'
 
 export const options = {
+  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
   scenarios: {
     quiz_flow: { executor: 'constant-vus', exec: 'quizFlow', vus: 150, duration: '90s' },
     rank_poll: { executor: 'constant-vus', exec: 'rankPoll', vus: 200, duration: '90s' },
@@ -47,7 +50,7 @@ export function quizFlow() {
 
   for (const q of qs) {
     const a = http.post(`${BASE}/api/answer`,
-      JSON.stringify({ request_id: `k6-${uid}-${__ITER}-${q.id}`, question_id: q.id, selected: 0 }),
+      JSON.stringify({ request_id: `k6-${RUN_ID}-${uid}-${__ITER}-${q.id}`, question_id: q.id, selected: 0 }),
       { headers: auth(tok), tags: { name: 'answer' } })
     check(a, { 'answer 200': (x) => x.status === 200 })
   }
@@ -70,4 +73,40 @@ export function wsConn() {
     })
   })
   check(res, { 'ws 101': (r) => r && r.status === 101 })
+}
+
+export function handleSummary(data) {
+  const metric = (name) => data.metrics[name]?.values || {}
+  const answerP99 = metric('http_req_duration{name:answer}')['p(99)']
+  const rankP99 = metric('http_req_duration{name:rank}')['p(99)']
+  const websocketP99 = metric('ws_connecting')['p(99)']
+  const report = {
+    run_id: RUN_ID,
+    generated_at: new Date().toISOString(),
+    scenarios: {
+      quiz_flow_vus: 150,
+      rank_poll_vus: 200,
+      websocket_vus: 50,
+      duration: '90s',
+    },
+    checks: metric('checks'),
+    http_req_failed: metric('http_req_failed'),
+    answer_p99_ms: answerP99,
+    rank_p99_ms: rankP99,
+    websocket_connecting_p99_ms: websocketP99,
+    thresholds: {
+      answer_p99_under_100ms: answerP99 < 100,
+      rank_p99_under_500ms: rankP99 < 500,
+      websocket_p99_under_500ms: websocketP99 < 500,
+    },
+  }
+  return {
+    [SUMMARY_PATH]: JSON.stringify(report, null, 2),
+    stdout: [
+      `answer P99 ${report.answer_p99_ms.toFixed(2)}ms`,
+      `rank P99 ${report.rank_p99_ms.toFixed(2)}ms`,
+      `WS P99 ${report.websocket_connecting_p99_ms.toFixed(2)}ms`,
+      `checks ${report.checks.passes}/${report.checks.passes + report.checks.fails}`,
+    ].join('\n') + '\n',
+  }
 }

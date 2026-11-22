@@ -1,0 +1,1 @@
+rollback ok: current -> previous admin merge -> current, preserving data and new tables without old-code startup failure

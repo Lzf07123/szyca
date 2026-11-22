@@ -12,9 +12,9 @@ import urllib.error
 import urllib.request
 
 
-BASE = os.environ.get("BASE_URL", "http://localhost:8092").rstrip("/")
+BASE = os.environ.get("BASE_URL", "http://localhost:8091").rstrip("/")
 USERNAME = os.environ.get("ADMIN_USERNAME", "owner")
-PASSWORD = os.environ.get("ADMIN_PASSWORD", "foundation-test")
+PASSWORD = os.environ.get("ADMIN_PASSWORD", "integrity-test")
 PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+X7n6WQAAAABJRU5ErkJggg=="
 )
@@ -25,6 +25,7 @@ class Session:
         jar = http.cookiejar.CookieJar()
         self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
         self.csrf = ""
+        self.set_cookie = ""
 
     def call(
         self,
@@ -69,7 +70,7 @@ def expect(status: int, payload: object, want: int, label: str) -> object:
 
 def login() -> Session:
     session = Session()
-    status, payload, _ = session.call(
+    status, payload, headers = session.call(
         "POST",
         "/api/admin/auth/login",
         body={"username": USERNAME, "password": PASSWORD},
@@ -77,6 +78,11 @@ def login() -> Session:
     )
     expect(status, payload, 200, "admin login")
     session.csrf = payload["csrf_token"]
+    session.set_cookie = headers.get("Set-Cookie") or headers.get("set-cookie") or ""
+    assert "HttpOnly" in session.set_cookie, session.set_cookie
+    assert "SameSite=Strict" in session.set_cookie, session.set_cookie
+    if os.environ.get("EXPECT_SECURE_COOKIE") == "1":
+        assert "Secure" in session.set_cookie, session.set_cookie
     return session
 
 

@@ -1,0 +1,28 @@
+{
+  "run_id": "1795372873279-36cde9e72a9224",
+  "generated_at": "2026-11-22T18:41:13.279Z",
+  "scenarios": {
+    "quiz_flow_vus": 150,
+    "rank_poll_vus": 200,
+    "websocket_vus": 50,
+    "duration": "90s"
+  },
+  "checks": {
+    "rate": 1,
+    "passes": 341073,
+    "fails": 0
+  },
+  "http_req_failed": {
+    "rate": 0,
+    "passes": 0,
+    "fails": 340673
+  },
+  "answer_p99_ms": 20.094512309999978,
+  "rank_p99_ms": 12.189796839999996,
+  "websocket_connecting_p99_ms": 39.860417999999996,
+  "thresholds": {
+    "answer_p99_under_100ms": true,
+    "rank_p99_under_500ms": true,
+    "websocket_p99_under_500ms": true
+  }
+}

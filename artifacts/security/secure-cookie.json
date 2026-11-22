@@ -1,0 +1,8 @@
+{
+  "http_status": 200,
+  "http_only": true,
+  "secure": true,
+  "same_site": "Strict",
+  "password_in_cookie": false,
+  "csrf_token_returned": true
+}

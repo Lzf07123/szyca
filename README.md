@@ -1,20 +1,24 @@
 # szyca
 
-计算机协会招新答题系统：现场高并发答题、实时计分、全量排行榜、大屏特效、加入我们（多二维码）、后台运营。
+汕头职业技术学院计算机协会官网与招新答题系统：数据驱动首页、现场高并发答题、实时计分、全量排行榜、大屏、加入我们、精细后台与集成抽奖。
 技术栈：Go 1.22 + gorilla/websocket + Redis + PostgreSQL + React 18 (Vite) + Nginx。
 生产环境合并为**单镜像、单容器、单数据卷**；低配机器只拉取预构建镜像，不需要本地编译。
 
-> 设计文档见 [docs/实现方案.md](docs/实现方案.md)
-> 官网化、模块化、后台精细化与抽奖实施见 [docs/官网重构与抽奖任务书.md](docs/官网重构与抽奖任务书.md)
+> 架构见 [docs/架构与模块.md](docs/架构与模块.md)，接口见 [docs/API.md](docs/API.md)
+>
+> 后台操作见 [docs/后台操作手册.md](docs/后台操作手册.md)，部署/回滚见 [docs/部署与回滚.md](docs/部署与回滚.md)
+>
+> 实施基线与验收取证见 [docs/官网重构与抽奖任务书.md](docs/官网重构与抽奖任务书.md)
 
 ## 功能一览
 
-- **吸睛首页**：协会会徽 + 照片墙横向轮播（后台批量上传）+ 科技感叠加特效（粒子网络/网格/光晕/扫描光束）
+- **数据驱动官网**：单次 `/api/site` 获取品牌、导航、页脚、模块开关、Typed Section、背景和二维码；首页支持 Hero、协会介绍、活动、答题、抽奖、加入我们、照片墙
 - **在线答题**：一人一设备一身份；难度自选（全部/容易/简单/困难）；每轮题目顺序持久化；只能按当前题序每题提交一次；正确选项不下发前端；服务端按截止时间校验，网络抖动可配置宽限
 - **排行榜**：按最佳一轮总分优先、同分按用时排序；全量排名（未答题也排）、大屏最多显示 99 名、头部显示「我的排名」、参与/答题/在线连接统计
 - **身份规则**：设备指纹去重（同设备换昵称需先放弃）；放弃身份需二次确认并告知副作用；放弃后昵称永久封存、榜单留痕；可多轮答题取历史最佳成绩
-- **后台管理**（口令验证后可见）：系统概览（资源/访问）、答题控制/特效/公告、群二维码图片切换、题库增删停/批量导入 CSV、成绩导出 CSV、二维码增删改（标题/换图/启停）、站点 Logo 上传/恢复、首页背景/页脚信息（ICP+公安备案）配置
-- **站点与演进底座**：`GET /api/site` 单请求聚合品牌、导航、页脚、模块开关、Typed Section、背景和二维码；版本化 SQL 迁移由 PostgreSQL advisory lock 串行执行；管理员账号、HttpOnly 会话、权限与审计数据表已建立
+- **后台 2.0**：owner / content_editor / event_operator / data_viewer 固定角色；HttpOnly + SameSite 会话、CSRF、Origin 校验、登录限流和全量写操作审计；菜单按权限生成，接口仍有服务端授权
+- **集成抽奖**：独立活动/奖品/抽取/领取数据域；CSPRNG 加权抽取、活动时间与暂停、资格门槛、库存事务、唯一用户约束、`request_id` 幂等、线下领取核销与 CSV
+- **迁移与媒体**：版本化 SQL、PostgreSQL advisory lock、事务迁移与校验和；媒体台账记录引用关系，被引用文件禁止直接删除
 
 ## 快速开始（低配机器：直接拉取镜像）
 
@@ -33,7 +37,8 @@ docker compose -f deploy/docker-compose.yml up -d
 | /quiz | 答题 |
 | /result | 个人成绩 |
 | /screen | 排行榜大屏（投屏） |
-| /admin | 后台管理（口令见 .env） |
+| /lottery | 抽奖（默认关闭） |
+| /admin | 后台管理（首次 owner 见 .env） |
 | /healthz | 健康检查 |
 
 停止：`docker compose -f deploy/docker-compose.yml down`（加 `-v` 清空数据库与上传文件）。
@@ -92,9 +97,12 @@ scripts/publish_image.sh --push
 
 1. 访问 `/admin`，输入 `ADMIN_USERNAME` 与 `ADMIN_PASSWORD` 创建的管理员账号
 2. **概览**：注册用户/参与答题/累计答题/当前在线/题库/背景/内存/协程/运行时长/DB/Redis
-3. **控制台**：开始/结束答题、特效广播、公告广播、二维码增删改（标题/换图/启停，标题展示在二维码下方）、**导出成绩 CSV**
+3. **答题控制**：开始/结束答题、特效广播、公告广播、二维码管理、成绩导出
 4. **题库**：**批量导入**（下载模板，列：题目,选项A~F,正确答案(A-F),难度,分值；「示例」开头行自动跳过）、新增题目、启用/停用
-5. **外观**：站点 Logo 上传（顶栏/首页会徽/大屏标题，按图片比例自动适配、不遮挡光环，并同时作为 favicon；未上传用内置样式，可一键恢复）、页脚信息（拥有人/开源协议/ICP+公安备案号与图标，图标后台上传）、首页背景批量上传（原比例、横向滚动）
+5. **站点内容**：模块总开关、Section 排序/启停、草稿/发布、定时上下线、标题/正文/CTA 配置
+6. **抽奖**：总开关、活动开始/暂停/结束、资格、奖品权重与库存、结果查看、领取核销与导出
+7. **媒体与外观**：Logo、页脚、背景和媒体引用台账
+8. **管理员/审计**：创建角色账号、停用即时踢线、按管理员/资源/请求 ID 查询审计
 
 ## 关键 API（全部 JSON；后台接口使用 HttpOnly Cookie + CSRF）
 
@@ -102,6 +110,7 @@ scripts/publish_image.sh --push
 |---|---|---|
 | POST | /api/session | 昵称+设备指纹 → 身份（同设备同昵称自动恢复） |
 | GET | /api/site | 公共站点单一配置契约（支持 ETag） |
+| GET | /api/content/pages/{slug} | 已发布内容页 |
 | POST | /api/quiz/round | 开始一轮（body: difficulty 可选） |
 | GET | /api/quiz/current | 恢复进行中的一轮，返回持久化题序与本题截止时间 |
 | POST | /api/answer | 提交当前题（request_id 幂等；该轮该题只能计分一次） |
@@ -111,6 +120,9 @@ scripts/publish_image.sh --push
 | GET | /api/backgrounds · /api/qrcode · /api/config | 前台资源 |
 | GET | /ws?token=… | WebSocket 实时推送（匿名=大屏） |
 | POST | /api/identity/abandon | 放弃身份（需本机 device_fp 归属校验） |
+| GET | /api/lottery/campaign | 当前抽奖活动和用户可见状态 |
+| POST | /api/lottery/draw | 带用户 token 与 request_id 抽取 |
+| GET | /api/lottery/me | 当前用户抽奖和领取状态 |
 | POST | /api/admin/auth/login | 管理员登录，设置 HttpOnly/SameSite Cookie 并返回 CSRF token |
 | GET* | /api/admin/auth/me | 当前管理员、角色和权限；刷新 CSRF token |
 | GET* | /api/admin/overview | 系统概览 |
@@ -124,17 +136,20 @@ scripts/publish_image.sh --push
 ## 目录结构
 
 ```
-backend/    Go 后端（cmd/server + internal/{config,store,rank,publish,quiz,ws,httpapi}）
-frontend/   React 18 + Vite（6 页面 + WS 客户端 + 幂等重试）
-deploy/     单容器 Dockerfile + Compose + Nginx/Supervisor 配置
-docs/       实现方案
+backend/              Go（site/access/audit/media/lottery/quiz/platform/store/ws）
+frontend/             React 18 + Vite（官网、答题、大屏、抽奖、RBAC 后台）
+deploy/               单容器 Dockerfile + Compose + Nginx/Supervisor
+design-system/szyca/  BRAND + MASTER + 页面规则
+docs/                 架构、API、后台、部署回滚与验收证据
+tests/browser/        Playwright + axe Docker 验收
+artifacts/browser/    六档视口、模块开/关、抽奖和后台截图
 ```
 
 ## 云端部署要点
 
 - 已备案域名 + 外部反向代理：TLS 在外部反代终止，容器内 Nginx 只走 HTTP；**外部代理仍需透传 WebSocket Upgrade 头**（见 docs §8-§9）
 - 前端构建产物建议发布到 OSS+CDN（现场"进门一分钟"静态流量集中）
-- 上线前：`.env` 改强口令 → 后台录入真实题库/二维码/备案号 → 压测（§1.3 指标）→ 现场演练
+- 上线前：`.env` 改强口令并设 `ADMIN_COOKIE_SECURE=true` → owner 登录 → 配置站点/抽奖 → 压测 → 现场演练
 - 单容器只暴露 8080；PostgreSQL/Redis 仅监听容器回环地址。备份时复制 `szyca_data` 卷即可同时保存数据库、Redis AOF 和上传文件。
 
 ## 压测（k6）
@@ -143,9 +158,13 @@ docs/       实现方案
 # 隔离环境（独立端口与数据卷，不污染正式数据）
 WEB_PORT=8081 ADMIN_PASSWORD=loadtest docker compose -p stpt-loadtest \
   -f deploy/docker-compose.yml -f deploy/docker-compose.build.yml up -d --build
-curl -X POST http://localhost:8081/api/admin/quiz-state -H 'Content-Type: application/json' -H 'X-Admin-Token: loadtest' -d '{"state":"start"}'
+# 在 http://localhost:8081/admin 用 owner/loadtest 登录并开始答题
 # 运行（400 VU：150 答题全流程 + 200 排行轮询 + 50 WebSocket）
-docker run --rm -i --network stpt-loadtest_default -e BASE_URL=http://szyca:8080 grafana/k6 run - < loadtest/k6-loadtest.js
+docker run --rm -i --network stpt-loadtest_default \
+  -v "$PWD/artifacts/loadtest:/out" \
+  -e BASE_URL=http://szyca:8080 \
+  -e SUMMARY_PATH=/out/k6-summary.json \
+  grafana/k6 run - < loadtest/k6-loadtest.js
 docker compose -p stpt-loadtest -f deploy/docker-compose.yml down -v
 ```
 
@@ -168,22 +187,56 @@ python3 scripts/integration_test.py
 docker compose -p stpt-integrity-test -f deploy/docker-compose.yml down -v
 ```
 
-覆盖题目脱敏、题序、幂等重试、单轮唯一计分、服务端超时、分值榜单、CSV 名次一致性、并发昵称唯一、WebSocket Origin 与后台口令限流。后端单测：
+以下脚本默认连接 `http://localhost:8091`，请按顺序运行；它们共享答题状态，不适合并发执行：
+
+```bash
+python3 scripts/integration_test.py
+python3 scripts/admin_access_test.py
+python3 scripts/site_media_test.py
+python3 scripts/lottery_test.py
+python3 scripts/migration_test.py
+python3 scripts/site_perf_test.py
+```
+
+覆盖题目脱敏、题序、幂等、服务端超时、排行榜/导出、并发注册、WS Origin、管理员登录限流、RBAC、CSRF、审计、站点 ETag/模块开关、媒体引用、抽奖资格、同用户并发、库存和领取。后端单测：
 
 ```bash
 docker run --rm -v "$PWD/backend:/src" -w /src golang:1.22-alpine go test ./...
 ```
 
-迁移幂等与重启数据保留：
+浏览器、无障碍、弱网降级与六档视口：
 
 ```bash
-python3 scripts/migration_test.py
+docker run --rm -v "$PWD/tests/browser:/work" -w /work \
+  mcr.microsoft.com/playwright:v1.56.0-noble npm ci --no-audit --no-fund
+docker run --rm --add-host=host.docker.internal:host-gateway \
+  -v "$PWD/tests/browser:/work" \
+  -v "$PWD/artifacts/browser:/artifacts/browser" \
+  -w /work \
+  -e BASE_URL=http://host.docker.internal:8091 \
+  -e ADMIN_PASSWORD=integrity-test \
+  mcr.microsoft.com/playwright:v1.56.0-noble node acceptance.mjs
 ```
 
-管理员会话、CSRF、Origin、RBAC、账号禁用与审计：
+旧库升级、整卷备份恢复与版本回滚演练：
 
 ```bash
-python3 scripts/admin_access_test.py
+docker build -f deploy/Dockerfile -t szyca:release-test .
+python3 scripts/legacy_migration_test.py
+python3 scripts/rollback_test.py
+python3 scripts/bundle_baseline_test.py
+```
+
+备份恢复脚本要求容器名 `szyca` 未被占用；它会创建、验证并清理两个明确命名的隔离测试栈：
+
+```bash
+python3 scripts/backup_restore_test.py
+```
+
+生产 Secure Cookie 标志：
+
+```bash
+TEST_IMAGE=szyca:release-test python3 scripts/secure_cookie_test.py
 ```
 
 ## 数据库迁移

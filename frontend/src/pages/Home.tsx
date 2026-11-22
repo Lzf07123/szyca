@@ -21,6 +21,17 @@ function Eyebrow({ children }: { children?: string }) {
   return children ? <p className="section-eyebrow">{children}</p> : null
 }
 
+function HeroTitle({ title }: { title?: string }) {
+  const parts = title?.match(/[^，。！？]+[，。！？]?/g) ?? [title || '']
+  return (
+    <>
+      {parts.map((part, index) => (
+        <span className="hero-title-line" key={`${part}-${index}`}>{part}</span>
+      ))}
+    </>
+  )
+}
+
 function Hero({
   section,
   backgrounds,
@@ -37,7 +48,7 @@ function Hero({
     <section className="home-hero" aria-labelledby="hero-title">
       <div className="hero-copy">
         <Eyebrow>{config.eyebrow}</Eyebrow>
-        <h1 id="hero-title">{config.title}</h1>
+        <h1 id="hero-title"><HeroTitle title={config.title} /></h1>
         <p className="hero-subtitle">{config.subtitle}</p>
         <div className="hero-actions">
           {primaryTo && config.primary_label && (

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import PageMeta from '../components/PageMeta'
-import { api, getToken } from '../api/client'
+import { api, getToken, randomID } from '../api/client'
 import { useSite } from '../api/site'
 
 interface Campaign {
@@ -68,7 +68,7 @@ export default function Lottery() {
   const [drawing, setDrawing] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
-  const requestID = useRef(crypto.randomUUID())
+  const requestID = useRef(randomID())
   const authenticated = Boolean(getToken())
 
   useEffect(() => {
@@ -79,7 +79,7 @@ export default function Lottery() {
         setCampaign(response.campaign)
         setDraw(response.draw)
         setEligible(Boolean(response.eligible))
-        if (response.campaign) requestID.current = crypto.randomUUID()
+        if (response.campaign) requestID.current = randomID()
       })
       .catch((cause) => {
         if (alive) setError((cause as Error).message)
