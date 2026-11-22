@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Navigate, useBlocker, useNavigate } from 'react-router-dom'
 import { api, clearToken, flushPending, getDeviceFP, getToken, loadPending, pushPending, setToken } from '../api/client'
+import { usePageMeta } from '../components/PageMeta'
 import { QuizSocket, wsURL } from '../ws/socket'
 
 interface Question {
@@ -29,6 +30,7 @@ interface RoundResp {
 type Phase = 'name' | 'loading' | 'quiz' | 'done'
 
 export default function Quiz() {
+  usePageMeta('答题挑战 · 计算机协会', '完成计算机协会招新答题挑战，实时保存成绩并查看排名。')
   const [phase, setPhase] = useState<Phase>('name')
   const [nickname, setNickname] = useState('')
   const [roundNo, setRoundNo] = useState(1)

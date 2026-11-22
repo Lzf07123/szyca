@@ -8,8 +8,8 @@ WORKDIR /frontend
 RUN if [ "$SOURCE_MIRROR" = "cn" ]; then \
         npm config set registry https://registry.npmmirror.com/; \
     fi
-COPY frontend/package.json ./
-RUN npm install --no-audit --no-fund
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
 RUN npm run build
 

@@ -7,6 +7,7 @@ export default function TechParticles() {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     let alive = true
     initParticlesEngine(async (engine) => {
       await loadSlim(engine)
@@ -29,17 +30,17 @@ export default function TechParticles() {
         detectRetina: false,
         particles: {
           number: { value: 36, density: { enable: true } },
-          color: { value: ['#22d3ee', '#22c55e'] },
+          color: { value: ['#7FD4C6', '#25786D'] },
           links: {
             enable: true,
-            color: '#22d3ee',
-            opacity: 0.32,
+            color: '#25786D',
+            opacity: 0.2,
             distance: 150,
             width: 1,
           },
           move: { enable: true, speed: 0.8, outModes: 'out' },
-          opacity: { value: 0.5 },
-          size: { value: 1.8 },
+          opacity: { value: 0.38 },
+          size: { value: 1.5 },
         },
       }}
     />

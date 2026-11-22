@@ -6,6 +6,7 @@ export default function ParticlesBg() {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     let alive = true
     initParticlesEngine(async (engine) => {
       await loadSlim(engine)
@@ -28,8 +29,8 @@ export default function ParticlesBg() {
         detectRetina: true,
         particles: {
           number: { value: 80, density: { enable: true } },
-          color: { value: '#22c55e' },
-          links: { enable: true, color: '#3b82f6', distance: 140 },
+          color: { value: '#7FD4C6' },
+          links: { enable: true, color: '#25786D', distance: 140 },
           move: { enable: true, speed: 1.2 },
           opacity: { value: 0.5 },
           size: { value: 2 },
