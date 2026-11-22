@@ -1,1 +1,0 @@
-migration ok: three versions applied once; restart retained {"attempts": 1126057, "backgrounds": 0, "qrcodes": 0, "questions": 40, "sections": 7, "users": 456}

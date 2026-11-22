@@ -19,6 +19,15 @@ backend/vendor/
 tmp/
 coverage/
 
+# 题库数据（通过后台导入，不进入源码仓库）
+题库/
+
+# 浏览器截图、性能与验收报告等可再生成产物
+artifacts/
+
+# 已被当前架构文档取代的历史方案
+docs/实现方案.md
+
 # IDE
 .idea/
 .vscode/

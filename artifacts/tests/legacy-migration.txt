@@ -1,1 +1,0 @@
-legacy migration ok: pre-seeded data preserved, 3 migrations recorded once, failed transaction rolled back, restart idempotent
