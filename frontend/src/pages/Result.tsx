@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
+import PageIntro from '../components/PageIntro'
 import { usePageMeta } from '../components/PageMeta'
 
 interface Me {
@@ -47,47 +48,61 @@ export default function Result() {
 
   if (!me) {
     return (
-      <section className="card center">
-        <h2>暂无答题记录</h2>
-        <p className="muted">请先完成答题</p>
-        <button className="btn btn-primary" onClick={() => nav('/quiz')}>
-          去答题
-        </button>
-      </section>
+      <>
+        <PageIntro
+          eyebrow="RESULT / 我的成绩"
+          title="个人成绩"
+          description="完成答题后，在这里查看本轮成绩、正确答案与实时排名。"
+        />
+        <section className="card center">
+          <h2>暂无答题记录</h2>
+          <p className="muted">请先完成答题</p>
+          <button className="btn btn-primary" onClick={() => nav('/quiz')}>
+            去答题
+          </button>
+        </section>
+      </>
     )
   }
 
   return (
-    <section className="result-wrap">
-      <div className="card center score-card">
-        <h2>{me.nickname}</h2>
-        <p className="big-score">{me.score}</p>
-        <p className="muted">
-          最佳成绩：答对 {me.correct} / {me.answered} 题 · 用时 {fmt(me.elapsed_ms)}
-        </p>
-        <p className="rank-line">
-          当前排名 <b>{me.rank > 0 ? `第 ${me.rank} 名` : '未上榜'}</b> / 共 {me.total} 个答题身份
-        </p>
-        <button className="btn" onClick={() => nav('/quiz')}>
-          再来一轮（保留最佳成绩）
-        </button>
-      </div>
+    <>
+      <PageIntro
+        eyebrow="RESULT / 我的成绩"
+        title="个人成绩"
+        description="成绩、正确题数与实时名次已同步到现场榜单。"
+      />
+      <section className="result-wrap">
+        <div className="card center score-card">
+          <h2>{me.nickname}</h2>
+          <p className="big-score">{me.score}</p>
+          <p className="muted">
+            最佳成绩：答对 {me.correct} / {me.answered} 题 · 用时 {fmt(me.elapsed_ms)}
+          </p>
+          <p className="rank-line">
+            当前排名 <b>{me.rank > 0 ? `第 ${me.rank} 名` : '未上榜'}</b> / 共 {me.total} 个答题身份
+          </p>
+          <button className="btn" onClick={() => nav('/quiz')}>
+            再来一轮（保留最佳成绩）
+          </button>
+        </div>
 
-      <div className="card">
-        <h3>实时排行榜 TOP 10</h3>
-        <ol className="rank-list">
-          {top.map((e, i) => (
-            <li key={e.user_id} className={e.user_id === String(me.user_id) ? 'self' : ''}>
-              <span className={`rank-no no${i + 1}`}>{i + 1}</span>
-              <span className="rank-name" title={e.nickname}>{e.nickname}</span>
-              <span className="rank-detail">
-                {e.score} 分 · {e.correct} 题 · {fmt(e.elapsed_ms)}
-              </span>
-            </li>
-          ))}
-          {top.length === 0 && <li className="muted">暂无数据</li>}
-        </ol>
-      </div>
-    </section>
+        <div className="card">
+          <h3>实时排行榜 TOP 10</h3>
+          <ol className="rank-list">
+            {top.map((e, i) => (
+              <li key={e.user_id} className={e.user_id === String(me.user_id) ? 'self' : ''}>
+                <span className={`rank-no no${i + 1}`}>{i + 1}</span>
+                <span className="rank-name" title={e.nickname}>{e.nickname}</span>
+                <span className="rank-detail">
+                  {e.score} 分 · {e.correct} 题 · {fmt(e.elapsed_ms)}
+                </span>
+              </li>
+            ))}
+            {top.length === 0 && <li className="muted">暂无数据</li>}
+          </ol>
+        </div>
+      </section>
+    </>
   )
 }

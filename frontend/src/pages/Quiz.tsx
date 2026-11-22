@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Navigate, useBlocker, useNavigate } from 'react-router-dom'
 import { api, clearToken, flushPending, getDeviceFP, getToken, loadPending, pushPending, randomID, setToken } from '../api/client'
+import PageIntro from '../components/PageIntro'
 import { usePageMeta } from '../components/PageMeta'
 import { QuizSocket, wsURL } from '../ws/socket'
 
@@ -688,6 +689,13 @@ export default function Quiz() {
 
   return (
     <>
+      {phase !== 'quiz' && (
+        <PageIntro
+          eyebrow="CHALLENGE / 在线答题"
+          title="答题中心"
+          description="选择难度，完成一轮答题。成绩与排名会实时写入现场榜单。"
+        />
+      )}
       {body}
       {confirmReq && (
         <div className="modal-veil" onClick={() => setConfirmReq(null)}>

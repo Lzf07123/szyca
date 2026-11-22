@@ -71,6 +71,7 @@ function Layout() {
   const { site, error } = useSite()
   const [menuOpen, setMenuOpen] = useState(false)
   const mainRef = useRef<HTMLElement>(null)
+  const navToggleRef = useRef<HTMLButtonElement>(null)
   const fullscreen = pathname === '/screen'
   const isHome = pathname === '/'
   useScrollReveal(pathname)
@@ -81,6 +82,25 @@ function Layout() {
     const timer = window.setTimeout(() => mainRef.current?.focus({ preventScroll: true }), 0)
     return () => window.clearTimeout(timer)
   }, [pathname])
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setMenuOpen(false)
+      navToggleRef.current?.focus()
+    }
+    const closeOnOutsidePress = (event: PointerEvent) => {
+      if ((event.target as Element | null)?.closest('.public-topbar')) return
+      setMenuOpen(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    document.addEventListener('pointerdown', closeOnOutsidePress)
+    return () => {
+      window.removeEventListener('keydown', closeOnEscape)
+      document.removeEventListener('pointerdown', closeOnOutsidePress)
+    }
+  }, [menuOpen])
 
   return (
     <div className={`app site-shell${fullscreen ? ' fullscreen' : ''}${isHome ? ' route-home' : ''}`}>
@@ -100,6 +120,7 @@ function Layout() {
             </span>
           </Link>
           <button
+            ref={navToggleRef}
             className="nav-toggle"
             type="button"
             aria-expanded={menuOpen}
