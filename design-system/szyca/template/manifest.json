@@ -1,7 +1,7 @@
 {
   "id": "szyca-deep-space",
   "name": "szyca 数字深空",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "ownership": "project",
   "derivedFrom": null,
   "sharedSubmodule": false,
@@ -32,9 +32,9 @@
   },
   "hashes": {
     "tokensSource": "299de329351eada9f8247dd5954a48ebac0bfc7c581129e738aa90a233021413",
-    "componentsSource": "e61ddc1db4f457f8cfba7fe4605de2f4e2e18188733c51315f584de5b0e435a4",
-    "tokensCss": "f383f90d94a4ca571d7d3bb513cab733fcd77e8b168e22ffa568380537ab3672",
-    "tokensJson": "8835881a0f204f77b8f22ad3f3a1fa7ca98bdfb4d4b8a261bbb0627358b56759",
-    "componentsCss": "a57ff0fb8eae53e07dd8ea895a920befdad747082223ae9f83ef185c4238fa63"
+    "componentsSource": "77499d0cda4435eb1457536d00967368a853023b3a4d83374880cc87d5f63055",
+    "tokensCss": "719a44263d668377c50699ba71b3564e17ffc9a5bed3b5f39e7a07de59a270e1",
+    "tokensJson": "e99b984f00c1145e12b304f2eed722fea49fb8eae16f6b5628efd61c62420afb",
+    "componentsCss": "3acbfbb8611897e5615fcd7701f8443ff927892a4026042ed1318bb6e941425e"
   }
 }

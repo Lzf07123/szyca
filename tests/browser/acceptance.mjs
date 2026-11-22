@@ -267,6 +267,8 @@ async function assertCosmosHome(page, label) {
     const grid = document.querySelector('.cosmic-grid')
     const logo = document.querySelector('.logo-mark')
     const moduleGrid = document.querySelector('.module-grid')
+    const orbit = document.querySelector('.signal-orbit')
+    const orbitStyle = getComputedStyle(orbit)
     return {
       canvas: canvas instanceof HTMLCanvasElement,
       nodes: canvas?.getAttribute('data-nodes'),
@@ -281,6 +283,8 @@ async function assertCosmosHome(page, label) {
       bootCommand: document.querySelector('.boot-command')?.textContent ?? '',
       terminalText: document.querySelector('.terminal-card')?.textContent ?? '',
       footerText: document.querySelector('.footer-terminal')?.textContent ?? '',
+      orbitBackground: orbitStyle.backgroundImage,
+      orbitShadow: orbitStyle.boxShadow,
       notoReady: document.fonts.check('300 40px "Noto Sans SC Variable"'),
       displayReady: document.fonts.check('400 20px "Space Grotesk Variable"'),
       monoReady: document.fonts.check('400 12px "JetBrains Mono Variable"'),
@@ -299,6 +303,9 @@ async function assertCosmosHome(page, label) {
   expect(cosmos.terminalText.includes('computer_association'), `${label}: terminal identity missing`)
   expect(cosmos.footerText.includes('EOF') && cosmos.footerText.includes('感谢阅读到底部'), `${label}: EOF footer missing`)
   expect(cosmos.notoReady && cosmos.displayReady && cosmos.monoReady, `${label}: required variable fonts did not load`)
+  expect(cosmos.orbitBackground.includes('conic-gradient'), `${label}: orbit arc styling missing`)
+  expect(!cosmos.orbitBackground.includes('radial-gradient'), `${label}: orbit still has an inner circular fill`)
+  expect(cosmos.orbitShadow === 'none', `${label}: orbit still has a circular shadow`)
 }
 
 async function revealForScreenshot(page) {
@@ -319,7 +326,7 @@ async function assertRuntimeAndBrandAssets(page, label) {
     const headerLogo = document.querySelector('.logo-mark img')
     const footerLogo = document.querySelector('.footer-mark img')
     const orbitHasLogo = Boolean(document.querySelector('.signal-orbit img, .signal-orbit .orbit-logo'))
-    const orbitStatus = document.querySelector('.signal-orbit .orbit-status')?.textContent?.trim() ?? ''
+    const orbitText = document.querySelector('.signal-orbit')?.textContent?.trim() ?? ''
     const uptime = document.querySelector('.hero-facts div:nth-child(3) dt')?.textContent?.trim() ?? ''
     const uptimeLabel = document.querySelector('.hero-facts div:nth-child(3) dd')?.textContent?.trim() ?? ''
     const logoStyle = headerLogo ? getComputedStyle(headerLogo) : null
@@ -331,7 +338,7 @@ async function assertRuntimeAndBrandAssets(page, label) {
       headerSrc: headerLogo?.getAttribute('src') ?? '',
       footerSrc: footerLogo?.getAttribute('src') ?? '',
       orbitHasLogo,
-      orbitStatus,
+      orbitText,
       logoBackground: logoStyle?.backgroundColor ?? '',
       logoBorder: logoStyle ? parseFloat(logoStyle.borderTopWidth) : null,
       logoPadding: logoStyle?.padding ?? '',
@@ -343,7 +350,7 @@ async function assertRuntimeAndBrandAssets(page, label) {
   expect(/^(--|\d+[dhm]\s?\d*[hm]?)$/.test(state.uptime), `${label}: unexpected uptime format ${state.uptime}`)
   expect(state.uptimeLabel.includes('UPTIME'), `${label}: uptime label is missing`)
   expect(!state.orbitHasLogo, `${label}: Hero orbit must not render a brand logo`)
-  expect(state.orbitStatus === 'LIVE', `${label}: Hero orbit status readout missing`)
+  expect(state.orbitText === '', `${label}: Hero orbit must not contain placeholder text`)
   if (state.headerSrc) {
     expect(state.footerSrc === state.headerSrc, `${label}: footer logo is not synchronized`)
     expect(state.logoBackground === 'rgba(0, 0, 0, 0)', `${label}: header logo still has a background`)
