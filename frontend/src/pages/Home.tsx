@@ -1,5 +1,7 @@
-import type { CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { Link } from 'react-router-dom'
+import { api } from '../api/client'
+import BrandMark from '../components/BrandMark'
 import PageMeta from '../components/PageMeta'
 import {
   useSite,
@@ -19,6 +21,17 @@ function canVisit(path: string | undefined, enabled: (key: SiteFeature['key']) =
 function splitTitle(title: string) {
   const parts = title.match(/[^，。！？]+[，。！？]?/g) ?? [title]
   return parts.length > 2 ? [parts.slice(0, -1).join(''), parts[parts.length - 1] || ''] : parts
+}
+
+function formatUptime(seconds: number | null) {
+  if (seconds === null) return '--'
+  const totalMinutes = Math.max(0, Math.floor(seconds / 60))
+  const days = Math.floor(totalMinutes / 1440)
+  const hours = Math.floor((totalMinutes % 1440) / 60)
+  const minutes = totalMinutes % 60
+  if (days > 0) return `${days}d ${hours}h`
+  if (hours > 0) return `${hours}h ${minutes}m`
+  return `${minutes}m`
 }
 
 type ModuleKind = 'quiz' | 'rank' | 'join'
@@ -62,11 +75,13 @@ function Hero({
   primaryTo,
   secondaryTo,
   backgrounds,
+  uptimeSeconds,
 }: {
   section: HomeSection
   primaryTo?: string
   secondaryTo?: string
   backgrounds: string[]
+  uptimeSeconds: number | null
 }) {
   const config = section.config
   const title = config.title || '把好奇心，写进每一行代码'
@@ -107,7 +122,7 @@ function Hero({
         <dl className="hero-facts" data-reveal style={{ '--reveal-delay': '380ms' } as CSSProperties}>
           <div><dt>03</dt><dd>核心模块 / MODULES</dd></div>
           <div><dt>150</dt><dd>开放题目 / QUESTIONS</dd></div>
-          <div><dt>24h</dt><dd>实时信号 / ONLINE</dd></div>
+          <div><dt>{formatUptime(uptimeSeconds)}</dt><dd>系统在线 / UPTIME</dd></div>
         </dl>
       </div>
 
@@ -141,7 +156,7 @@ function Hero({
           </div>
         </div>
         <div className="signal-orbit" aria-hidden="true">
-          <span className="orbit-code">CA</span>
+          <BrandMark variant="orbit" />
           <small>COMPUTER<br />ASSOCIATION</small>
         </div>
       </div>
@@ -298,6 +313,7 @@ function LotterySignal({
 
 export default function Home() {
   const { site, featureEnabled } = useSite()
+  const [uptimeSeconds, setUptimeSeconds] = useState<number | null>(null)
   const sections = [...site.sections].filter((section) => section.enabled).sort((a, b) => a.sort - b.sort)
   const hero = sections.find((section) => section.kind === 'hero')
   const about = sections.find((section) => section.kind === 'about')
@@ -313,6 +329,25 @@ export default function Home() {
     ? hero?.config.secondary_to
     : featureEnabled('join') ? '/join' : undefined
 
+  useEffect(() => {
+    let alive = true
+    const syncUptime = () => {
+      void api<{ uptime_seconds: number }>('/api/runtime')
+        .then((runtime) => {
+          if (alive && Number.isFinite(runtime.uptime_seconds)) {
+            setUptimeSeconds(runtime.uptime_seconds)
+          }
+        })
+        .catch(() => undefined)
+    }
+    syncUptime()
+    const timer = window.setInterval(syncUptime, 60_000)
+    return () => {
+      alive = false
+      window.clearInterval(timer)
+    }
+  }, [])
+
   return (
     <>
       <PageMeta
@@ -326,6 +361,7 @@ export default function Home() {
             primaryTo={primaryTo}
             secondaryTo={secondaryTo}
             backgrounds={backgrounds}
+            uptimeSeconds={uptimeSeconds}
           />
         )}
         <Whoami section={about} activities={activities} />

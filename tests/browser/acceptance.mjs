@@ -275,6 +275,7 @@ async function assertCosmosHome(page, label) {
       gridSize: getComputedStyle(grid).backgroundSize,
       logoTransform: getComputedStyle(logo, '::before').transform,
       logoGradient: getComputedStyle(logo, '::before').backgroundImage,
+      hasUploadedLogo: Boolean(logo.querySelector('img')),
       moduleCount: document.querySelectorAll('.module-card').length,
       moduleColumns: getComputedStyle(moduleGrid).gridTemplateColumns.split(' ').length,
       bootCommand: document.querySelector('.boot-command')?.textContent ?? '',
@@ -290,8 +291,8 @@ async function assertCosmosHome(page, label) {
   expect(cosmos.linkDistance === '110', `${label}: expected 110px links, got ${cosmos.linkDistance}`)
   expect(cosmos.gravityDistance === '190', `${label}: missing pointer gravity contract`)
   expect(cosmos.gridSize.includes('56px'), `${label}: 56px grid missing (${cosmos.gridSize})`)
-  expect(cosmos.logoTransform !== 'none', `${label}: rotated logo mark missing`)
-  expect(cosmos.logoGradient.includes('conic-gradient'), `${label}: conic logo gradient missing`)
+  expect(cosmos.hasUploadedLogo || cosmos.logoTransform !== 'none', `${label}: logo mark missing`)
+  expect(cosmos.hasUploadedLogo || cosmos.logoGradient.includes('conic-gradient'), `${label}: fallback logo gradient missing`)
   expect(cosmos.moduleCount === 3, `${label}: expected three core modules, got ${cosmos.moduleCount}`)
   expect(cosmos.moduleColumns === (page.viewportSize().width <= 820 ? 1 : 3), `${label}: module grid breakpoint failed`)
   expect(cosmos.bootCommand.includes('boot nebula_os') && cosmos.bootCommand.includes('[OK]'), `${label}: boot line missing`)
@@ -309,6 +310,43 @@ async function revealForScreenshot(page) {
     })
   })
   await page.waitForTimeout(50)
+}
+
+async function assertRuntimeAndBrandAssets(page, label) {
+  const state = await page.evaluate(async () => {
+    const response = await fetch('/api/runtime', { cache: 'no-store' })
+    const runtime = await response.json()
+    const headerLogo = document.querySelector('.logo-mark img')
+    const footerLogo = document.querySelector('.footer-mark img')
+    const orbitLogo = document.querySelector('.signal-orbit .orbit-logo')
+    const uptime = document.querySelector('.hero-facts div:nth-child(3) dt')?.textContent?.trim() ?? ''
+    const uptimeLabel = document.querySelector('.hero-facts div:nth-child(3) dd')?.textContent?.trim() ?? ''
+    const logoStyle = headerLogo ? getComputedStyle(headerLogo) : null
+    return {
+      runtimeStatus: response.status,
+      uptimeSeconds: runtime.uptime_seconds,
+      uptime,
+      uptimeLabel,
+      headerSrc: headerLogo?.getAttribute('src') ?? '',
+      footerSrc: footerLogo?.getAttribute('src') ?? '',
+      orbitSrc: orbitLogo?.getAttribute('src') ?? '',
+      logoBackground: logoStyle?.backgroundColor ?? '',
+      logoBorder: logoStyle ? parseFloat(logoStyle.borderTopWidth) : null,
+      logoPadding: logoStyle?.padding ?? '',
+    }
+  })
+  expect(state.runtimeStatus === 200, `${label}: runtime endpoint failed`)
+  expect(Number.isFinite(state.uptimeSeconds), `${label}: runtime uptime is invalid`)
+  expect(state.uptime !== '24h', `${label}: hero still uses the hard-coded 24h uptime`)
+  expect(/^(--|\d+[dhm]\s?\d*[hm]?)$/.test(state.uptime), `${label}: unexpected uptime format ${state.uptime}`)
+  expect(state.uptimeLabel.includes('UPTIME'), `${label}: uptime label is missing`)
+  if (state.headerSrc) {
+    expect(state.footerSrc === state.headerSrc, `${label}: footer logo is not synchronized`)
+    expect(state.orbitSrc === state.headerSrc, `${label}: hero orbit logo is not synchronized`)
+    expect(state.logoBackground === 'rgba(0, 0, 0, 0)', `${label}: header logo still has a background`)
+    expect(state.logoBorder === 0, `${label}: header logo still has a border`)
+    expect(state.logoPadding === '0px', `${label}: header logo still has padding`)
+  }
 }
 
 async function axeCheck(page, label) {
@@ -424,6 +462,7 @@ async function main() {
         )
       }
       if (width === 390) {
+        await assertRuntimeAndBrandAssets(page, `home-${width}`)
         await axeCheck(page, `home-${width}`)
       }
       await context.close()
