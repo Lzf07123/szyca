@@ -117,7 +117,7 @@ scripts/publish_image.sh --push
 | GET | /api/me | 我的最佳成绩与全量排名 |
 | GET | /api/rank?top=99 | 排行榜 |
 | GET | /api/stats | 参与人数/累计答题/在线连接数 |
-| GET | /api/runtime | 系统运行时长（秒，公开只读） |
+| GET | /api/runtime | 系统运行时长（秒）与启动时间（公开只读） |
 | GET | /api/backgrounds · /api/qrcode · /api/config | 前台资源 |
 | GET | /ws?token=… | WebSocket 实时推送（匿名=大屏） |
 | POST | /api/identity/abandon | 放弃身份（需本机 device_fp 归属校验） |
