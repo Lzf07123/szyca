@@ -1,4 +1,5 @@
 import PageMeta from '../components/PageMeta'
+import PageIntro from '../components/PageIntro'
 import { useSite } from '../api/site'
 
 export default function Join() {
@@ -12,11 +13,12 @@ export default function Join() {
         description="扫码加入计算机协会招新群，获取招新、活动和技术分享资讯。"
       />
       <section className="join-page">
-        <header className="join-head">
-          <p className="section-eyebrow">JOIN THE COMMUNITY</p>
-          <h1>加入我们</h1>
-          <p>扫码加入招新群，或关注协会公众号。名额与活动信息以现场发布为准。</p>
-        </header>
+        <PageIntro
+          className="join-head"
+          eyebrow="JOIN THE COMMUNITY / 加入我们"
+          title="加入我们"
+          description="扫码加入招新群，或关注协会公众号。名额与活动信息以现场发布为准。"
+        />
         {qrcodes.length > 0 ? (
           <div className="qr-grid">
             {qrcodes.map((qrcode) => (

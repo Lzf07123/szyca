@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import PageIntro from '../components/PageIntro'
 import PageMeta from '../components/PageMeta'
 import { api, getToken, randomID } from '../api/client'
 import { useSite } from '../api/site'
@@ -121,17 +122,22 @@ export default function Lottery() {
         description="完成答题后参与计算机协会现场抽奖，抽取结果由服务端公平生成。"
       />
       <section className="lottery-page">
-        <div className="lottery-copy">
-          <p className="section-eyebrow">FAIR DRAW · ONE TRY</p>
-          <h1>完成答题，<br />带走一份好运。</h1>
-          <p>每个账号限参与一次。奖品库存、活动时间与资格均由服务端校验，结果不可由客户端修改。</p>
-          <ol className="lottery-steps">
-            <li><span>01</span>完成一轮答题</li>
-            <li><span>02</span>确认活动进行中</li>
-            <li><span>03</span>点击抽取并保存结果</li>
-          </ol>
-        </div>
-        <div className="lottery-card">
+        <PageIntro
+          eyebrow="FAIR DRAW / 现场抽奖"
+          title="现场抽奖"
+          description="完成答题，带走一份好运。每个账号限参与一次，奖品、时间与资格均由服务端校验。"
+        />
+        <div className="lottery-layout">
+          <div className="lottery-copy">
+            <p className="section-eyebrow">HOW IT WORKS / 参与步骤</p>
+            <h2>三步完成抽取</h2>
+            <ol className="lottery-steps">
+              <li><span>01</span>完成一轮答题</li>
+              <li><span>02</span>确认活动进行中</li>
+              <li><span>03</span>点击抽取并保存结果</li>
+            </ol>
+          </div>
+          <div className="lottery-card">
           <div className="lottery-card-head">
             <span className={`status-dot${campaign?.status === 'active' ? ' live' : ''}`} aria-hidden="true" />
             <strong>{loading ? '正在读取活动…' : campaignState(campaign)}</strong>
@@ -195,8 +201,9 @@ export default function Lottery() {
               <p>管理员开放活动后会在这里显示奖品与参与条件。</p>
             </div>
           )}
-          {message && <p className="form-success" role="status">{message}</p>}
-          {error && <p className="error" role="alert">{error}</p>}
+            {message && <p className="form-success" role="status">{message}</p>}
+            {error && <p className="error" role="alert">{error}</p>}
+          </div>
         </div>
       </section>
     </>
