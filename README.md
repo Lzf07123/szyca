@@ -14,6 +14,7 @@
 - **排行榜**：按最佳一轮总分优先、同分按用时排序；全量排名（未答题也排）、大屏最多显示 99 名、头部显示「我的排名」、参与/答题/在线连接统计
 - **身份规则**：设备指纹去重（同设备换昵称需先放弃）；放弃身份需二次确认并告知副作用；放弃后昵称永久封存、榜单留痕；可多轮答题取历史最佳成绩
 - **后台管理**（口令验证后可见）：系统概览（资源/访问）、答题控制/特效/公告、群二维码图片切换、题库增删停/批量导入 CSV、成绩导出 CSV、二维码增删改（标题/换图/启停）、站点 Logo 上传/恢复、首页背景/页脚信息（ICP+公安备案）配置
+- **站点与演进底座**：`GET /api/site` 单请求聚合品牌、导航、页脚、模块开关、Typed Section、背景和二维码；版本化 SQL 迁移由 PostgreSQL advisory lock 串行执行；管理员账号、HttpOnly 会话、权限与审计数据表已建立
 
 ## 快速开始（低配机器：直接拉取镜像）
 
@@ -96,6 +97,7 @@ scripts/publish_image.sh --push
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | /api/session | 昵称+设备指纹 → 身份（同设备同昵称自动恢复） |
+| GET | /api/site | 公共站点单一配置契约（支持 ETag） |
 | POST | /api/quiz/round | 开始一轮（body: difficulty 可选） |
 | GET | /api/quiz/current | 恢复进行中的一轮，返回持久化题序与本题截止时间 |
 | POST | /api/answer | 提交当前题（request_id 幂等；该轮该题只能计分一次） |
@@ -165,6 +167,29 @@ docker compose -p stpt-integrity-test -f deploy/docker-compose.yml down -v
 ```bash
 docker run --rm -v "$PWD/backend:/src" -w /src golang:1.22-alpine go test ./...
 ```
+
+迁移幂等与重启数据保留：
+
+```bash
+python3 scripts/migration_test.py
+```
+
+管理员会话、CSRF、Origin、RBAC、账号禁用与审计：
+
+```bash
+python3 scripts/admin_access_test.py
+```
+
+## 数据库迁移
+
+迁移文件位于 `backend/internal/platform/migrate/migrations/`。应用启动时：
+
+1. 获取 PostgreSQL advisory lock；
+2. 校验 `schema_migrations` 中已应用版本的 SHA-256；
+3. 将每个待执行迁移和版本记录放在同一事务中提交；
+4. 失败时回滚该版本并终止启动，不留下半迁移状态。
+
+旧库升级会先执行幂等的 `0001_quiz_baseline.sql`，保留用户、题目、作答、轮次、二维码、背景、页脚和 Logo 数据。
 
 ## License
 

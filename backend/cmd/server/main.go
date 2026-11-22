@@ -10,11 +10,15 @@ import (
 	"syscall"
 	"time"
 
+	"szyca/internal/access"
+	"szyca/internal/audit"
 	"szyca/internal/config"
 	"szyca/internal/httpapi"
+	"szyca/internal/media"
 	"szyca/internal/publish"
 	"szyca/internal/quiz"
 	"szyca/internal/rank"
+	"szyca/internal/site"
 	"szyca/internal/store"
 	"szyca/internal/ws"
 )
@@ -30,6 +34,16 @@ func main() {
 		log.Fatalf("store: %v", err)
 	}
 	defer st.Close()
+
+	auditSvc := audit.New(st.Pool())
+	accessSvc := access.New(st.Pool(), time.Duration(cfg.AdminSessionHours)*time.Hour)
+	createdOwner, err := accessSvc.EnsureBootstrapOwner(ctx, cfg.AdminUsername, cfg.AdminPassword)
+	if err != nil {
+		log.Fatalf("bootstrap administrator: %v", err)
+	}
+	if createdOwner {
+		log.Printf("created initial owner account %q", cfg.AdminUsername)
+	}
 
 	rk := rank.New(cfg.RedisAddr)
 	if err := rk.Ping(ctx); err != nil {
@@ -47,12 +61,14 @@ func main() {
 
 	svc := quiz.New(st, rk, pub, cfg.Title, cfg.QuestionSeconds, cfg.AnswerGraceSeconds)
 	svc.StartLeaderboardRefresh(ctx)
+	siteSvc := site.New(st.Pool(), cfg.Title)
+	mediaSvc := media.New(st.Pool())
 	hub := ws.NewHub(svc, pub.Subscribe(ctx)) // 排行榜改走 DB 全量排名
 	go hub.Run(ctx)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpapi.New(cfg, svc, hub).Handler(),
+		Handler:           httpapi.New(cfg, svc, siteSvc, mediaSvc, accessSvc, auditSvc, hub).Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

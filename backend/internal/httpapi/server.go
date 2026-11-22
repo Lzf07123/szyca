@@ -22,8 +22,12 @@ import (
 	"sync"
 	"time"
 
+	"szyca/internal/access"
+	"szyca/internal/audit"
 	"szyca/internal/config"
+	"szyca/internal/media"
 	"szyca/internal/quiz"
+	"szyca/internal/site"
 	"szyca/internal/store"
 	"szyca/internal/ws"
 )
@@ -31,15 +35,28 @@ import (
 type Server struct {
 	cfg       config.Config
 	svc       *quiz.Service
+	site      *site.Service
+	media     *media.Service
+	access    *access.Service
+	audit     *audit.Service
 	hub       *ws.Hub
 	startedAt time.Time
 	adminMu   sync.Mutex
 	adminFail map[string]adminFailure
 }
 
-func New(cfg config.Config, svc *quiz.Service, hub *ws.Hub) *Server {
+func New(
+	cfg config.Config,
+	svc *quiz.Service,
+	siteSvc *site.Service,
+	mediaSvc *media.Service,
+	accessSvc *access.Service,
+	auditSvc *audit.Service,
+	hub *ws.Hub,
+) *Server {
 	return &Server{
-		cfg: cfg, svc: svc, hub: hub, startedAt: time.Now(),
+		cfg: cfg, svc: svc, site: siteSvc, media: mediaSvc, access: accessSvc, audit: auditSvc,
+		hub: hub, startedAt: time.Now(),
 		adminFail: make(map[string]adminFailure),
 	}
 }
@@ -61,56 +78,77 @@ func (s *Server) Handler() http.Handler {
 	})
 
 	// 公开
+	mux.HandleFunc("GET /api/site", s.handleSite)
 	mux.HandleFunc("GET /api/backgrounds", s.handleBackgrounds)
-	mux.HandleFunc("GET /api/stats", s.handleStats)
-	mux.HandleFunc("POST /api/identity/abandon", s.handleAbandonIdentity)
-	mux.HandleFunc("GET /api/identity/current", s.handleCurrentIdentity)
-	mux.HandleFunc("POST /api/session", s.handleSession)
-	mux.HandleFunc("GET /api/rank", s.handleRank)
-	mux.HandleFunc("GET /api/qrcode", s.handleQrcode)
+	mux.HandleFunc("GET /api/stats", s.withFeature(site.FeatureQuiz, s.handleStats))
+	mux.HandleFunc("POST /api/identity/abandon", s.withFeature(site.FeatureQuiz, s.handleAbandonIdentity))
+	mux.HandleFunc("GET /api/identity/current", s.withFeature(site.FeatureQuiz, s.handleCurrentIdentity))
+	mux.HandleFunc("POST /api/session", s.withFeature(site.FeatureQuiz, s.handleSession))
+	mux.HandleFunc("GET /api/rank", s.withFeature(site.FeatureQuiz, s.handleRank))
+	mux.HandleFunc("GET /api/qrcode", s.withFeature(site.FeatureJoin, s.handleQrcode))
 	mux.HandleFunc("GET /api/config", s.handleConfig)
+	mux.HandleFunc("GET /api/content/pages/{slug}", s.handleSitePage)
 
 	// 需 token
-	mux.HandleFunc("POST /api/quiz/round", s.withUser(s.handleStartRound))
-	mux.HandleFunc("POST /api/quiz/round/abandon", s.withUser(s.handleAbandonRound))
-	mux.HandleFunc("GET /api/quiz/current", s.withUser(s.handleCurrentRound))
-	mux.HandleFunc("POST /api/answer", s.withUser(s.handleAnswer))
-	mux.HandleFunc("GET /api/me", s.withUser(s.handleMe))
+	mux.HandleFunc("POST /api/quiz/round", s.withFeature(site.FeatureQuiz, s.withUser(s.handleStartRound)))
+	mux.HandleFunc("POST /api/quiz/round/abandon", s.withFeature(site.FeatureQuiz, s.withUser(s.handleAbandonRound)))
+	mux.HandleFunc("GET /api/quiz/current", s.withFeature(site.FeatureQuiz, s.withUser(s.handleCurrentRound)))
+	mux.HandleFunc("POST /api/answer", s.withFeature(site.FeatureQuiz, s.withUser(s.handleAnswer)))
+	mux.HandleFunc("GET /api/me", s.withFeature(site.FeatureQuiz, s.withUser(s.handleMe)))
 
 	// WebSocket（可匿名=大屏）
-	mux.HandleFunc("GET /ws", ws.Serve(s.hub, s.validateToken, s.cfg.WSAllowedOrigins))
+	mux.HandleFunc("GET /ws", s.withAnyFeature(
+		[]string{site.FeatureQuiz, site.FeatureScreen},
+		ws.Serve(s.hub, s.validateToken, s.cfg.WSAllowedOrigins),
+	))
 
-	// 后台（X-Admin-Token）
-	mux.HandleFunc("POST /api/admin/quiz-state", s.withAdmin(s.handleAdminState))
-	mux.HandleFunc("GET /api/admin/overview", s.withAdmin(s.handleAdminOverview))
-	mux.HandleFunc("GET /api/admin/export/scores", s.withAdmin(s.handleAdminExportScores))
-	mux.HandleFunc("POST /api/admin/questions/import", s.withAdmin(s.handleAdminImportQuestions))
-	mux.HandleFunc("GET /api/admin/questions/template", s.withAdmin(s.handleAdminQuestionsTemplate))
-	mux.HandleFunc("POST /api/admin/announce", s.withAdmin(s.handleAdminAnnounce))
-	mux.HandleFunc("POST /api/admin/effect", s.withAdmin(s.handleAdminEffect))
-	mux.HandleFunc("GET /api/admin/qrcodes", s.withAdmin(s.handleAdminListQrcodes))
-	mux.HandleFunc("POST /api/admin/qrcodes", s.withAdmin(s.handleAdminAddQrcode))
-	mux.HandleFunc("POST /api/admin/qrcodes/{id}", s.withAdmin(s.handleAdminUpdateQrcode))
-	mux.HandleFunc("DELETE /api/admin/qrcodes/{id}", s.withAdmin(s.handleAdminDeleteQrcode))
-	mux.HandleFunc("GET /api/admin/questions", s.withAdmin(s.handleAdminListQuestions))
-	mux.HandleFunc("POST /api/admin/questions", s.withAdmin(s.handleAdminCreateQuestion))
-	mux.HandleFunc("DELETE /api/admin/questions", s.withAdmin(s.handleAdminClearQuestions))
-	mux.HandleFunc("POST /api/admin/questions/{id}/active", s.withAdmin(s.handleAdminSetActive))
-	mux.HandleFunc("POST /api/admin/backgrounds", s.withAdmin(s.handleAdminUploadBackground))
-	mux.HandleFunc("GET /api/admin/backgrounds", s.withAdmin(s.handleAdminListBackgrounds))
-	mux.HandleFunc("POST /api/admin/backgrounds/{id}/active", s.withAdmin(s.handleAdminSetBgActive))
-	mux.HandleFunc("DELETE /api/admin/backgrounds/{id}", s.withAdmin(s.handleAdminDeleteBackground))
-	mux.HandleFunc("DELETE /api/admin/backgrounds", s.withAdmin(s.handleAdminClearBackgrounds))
-	mux.HandleFunc("POST /api/admin/uploads", s.withAdmin(s.handleAdminUpload))
-	mux.HandleFunc("GET /api/admin/footer", s.withAdmin(s.handleAdminGetFooter))
-	mux.HandleFunc("POST /api/admin/footer", s.withAdmin(s.handleAdminSaveFooter))
-	mux.HandleFunc("GET /api/admin/logo", s.withAdmin(s.handleAdminGetLogo))
-	mux.HandleFunc("POST /api/admin/logo", s.withAdmin(s.handleAdminSaveLogo))
+	// 后台：账号会话 + 固定角色权限；旧 X-Admin-Token 仅作迁移期 owner 兼容。
+	mux.HandleFunc("POST /api/admin/auth/login", s.handleAdminLogin)
+	mux.HandleFunc("GET /api/admin/auth/me", s.withAuthenticated(s.handleAdminMe))
+	mux.HandleFunc("POST /api/admin/auth/logout", s.withAuthenticated(s.handleAdminLogout))
+	mux.HandleFunc("GET /api/admin/accounts", s.withPermission("access.manage", s.handleAdminListAccounts))
+	mux.HandleFunc("POST /api/admin/accounts", s.withPermission("access.manage", s.handleAdminCreateAccount))
+	mux.HandleFunc("POST /api/admin/accounts/{id}/disabled", s.withPermission("access.manage", s.handleAdminDisableAccount))
+	mux.HandleFunc("GET /api/admin/audit", s.withPermission("audit.read", s.handleAdminAudit))
+
+	mux.HandleFunc("GET /api/admin/site", s.withPermission("site.read", s.handleAdminSite))
+	mux.HandleFunc("GET /api/admin/site/sections", s.withPermission("site.read", s.handleAdminSections))
+	mux.HandleFunc("PUT /api/admin/site/sections", s.withPermission("site.write", s.handleAdminSaveSections))
+	mux.HandleFunc("GET /api/admin/platform/features", s.withPermission("site.read", s.handleAdminFeatures))
+	mux.HandleFunc("PUT /api/admin/platform/features", s.withAuthenticated(s.handleAdminSaveFeatures))
+	mux.HandleFunc("GET /api/admin/media", s.withPermission("media.read", s.handleAdminMedia))
+	mux.HandleFunc("DELETE /api/admin/media/{id}", s.withPermission("media.write", s.handleAdminDeleteMedia))
+
+	mux.HandleFunc("POST /api/admin/quiz-state", s.withPermission("quiz.operate", s.handleAdminState))
+	mux.HandleFunc("GET /api/admin/overview", s.withPermission("site.read", s.handleAdminOverview))
+	mux.HandleFunc("GET /api/admin/export/scores", s.withPermission("scores.read", s.handleAdminExportScores))
+	mux.HandleFunc("POST /api/admin/questions/import", s.withPermission("quiz.write", s.handleAdminImportQuestions))
+	mux.HandleFunc("GET /api/admin/questions/template", s.withPermission("quiz.read", s.handleAdminQuestionsTemplate))
+	mux.HandleFunc("POST /api/admin/announce", s.withPermission("quiz.operate", s.handleAdminAnnounce))
+	mux.HandleFunc("POST /api/admin/effect", s.withPermission("quiz.operate", s.handleAdminEffect))
+	mux.HandleFunc("GET /api/admin/qrcodes", s.withPermission("site.read", s.handleAdminListQrcodes))
+	mux.HandleFunc("POST /api/admin/qrcodes", s.withPermission("site.write", s.handleAdminAddQrcode))
+	mux.HandleFunc("POST /api/admin/qrcodes/{id}", s.withPermission("site.write", s.handleAdminUpdateQrcode))
+	mux.HandleFunc("DELETE /api/admin/qrcodes/{id}", s.withPermission("site.write", s.handleAdminDeleteQrcode))
+	mux.HandleFunc("GET /api/admin/questions", s.withPermission("quiz.read", s.handleAdminListQuestions))
+	mux.HandleFunc("POST /api/admin/questions", s.withPermission("quiz.write", s.handleAdminCreateQuestion))
+	mux.HandleFunc("DELETE /api/admin/questions", s.withPermission("quiz.write", s.handleAdminClearQuestions))
+	mux.HandleFunc("POST /api/admin/questions/{id}/active", s.withPermission("quiz.write", s.handleAdminSetActive))
+	mux.HandleFunc("POST /api/admin/backgrounds", s.withPermission("media.write", s.handleAdminUploadBackground))
+	mux.HandleFunc("GET /api/admin/backgrounds", s.withPermission("media.read", s.handleAdminListBackgrounds))
+	mux.HandleFunc("POST /api/admin/backgrounds/{id}/active", s.withPermission("media.write", s.handleAdminSetBgActive))
+	mux.HandleFunc("DELETE /api/admin/backgrounds/{id}", s.withPermission("media.write", s.handleAdminDeleteBackground))
+	mux.HandleFunc("DELETE /api/admin/backgrounds", s.withPermission("media.write", s.handleAdminClearBackgrounds))
+	mux.HandleFunc("POST /api/admin/uploads", s.withPermission("media.write", s.handleAdminUpload))
+	mux.HandleFunc("GET /api/admin/footer", s.withPermission("site.read", s.handleAdminGetFooter))
+	mux.HandleFunc("POST /api/admin/footer", s.withPermission("site.write", s.handleAdminSaveFooter))
+	mux.HandleFunc("GET /api/admin/logo", s.withPermission("site.read", s.handleAdminGetLogo))
+	mux.HandleFunc("POST /api/admin/logo", s.withPermission("site.write", s.handleAdminSaveLogo))
 
 	// 上传文件静态服务（生产由 nginx 直出共享卷，此处兜底开发模式）
 	mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(s.cfg.UploadDir))))
 
-	return withCORS(mux)
+	return s.withCORS(mux)
 }
 
 func (s *Server) validateToken(token string) bool {
@@ -118,6 +156,38 @@ func (s *Server) validateToken(token string) bool {
 	defer cancel()
 	_, err := s.svc.ValidateToken(ctx, token)
 	return err == nil
+}
+
+func (s *Server) withFeature(key string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		enabled, err := s.site.FeatureEnabled(r.Context(), key)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "读取模块开关失败")
+			return
+		}
+		if !enabled {
+			writeErrCode(w, http.StatusNotFound, "功能未开放", "feature_disabled")
+			return
+		}
+		next(w, r)
+	}
+}
+
+func (s *Server) withAnyFeature(keys []string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		for _, key := range keys {
+			enabled, err := s.site.FeatureEnabled(r.Context(), key)
+			if err != nil {
+				writeErr(w, http.StatusInternalServerError, "读取模块开关失败")
+				return
+			}
+			if enabled {
+				next(w, r)
+				return
+			}
+		}
+		writeErrCode(w, http.StatusNotFound, "功能未开放", "feature_disabled")
+	}
 }
 
 // ---------- middleware ----------
@@ -248,6 +318,10 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 func writeErr(w http.ResponseWriter, code int, msg string) {
 	writeJSON(w, code, map[string]string{"error": msg})
+}
+
+func writeErrCode(w http.ResponseWriter, code int, msg, errorCode string) {
+	writeJSON(w, code, map[string]string{"error": msg, "code": errorCode})
 }
 
 func readJSON(r *http.Request, v any) error {
@@ -522,6 +596,12 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logoURL = ""
 	}
+	flags := map[string]bool{}
+	if features, err := s.site.Features(r.Context()); err == nil {
+		for _, feature := range features {
+			flags[feature.Key] = feature.Enabled
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"title":            s.svc.Title(),
 		"quiz_state":       state,
@@ -529,6 +609,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		"announcement":     announce,
 		"footer":           footer,
 		"logo_url":         logoURL,
+		"features":         flags,
 	})
 }
 
@@ -599,6 +680,10 @@ func (s *Server) handleAdminAddQrcode(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	s.attachUploadedMedia(
+		r, principalFromRequest(r), url, "site", "qrcode",
+		strconv.FormatInt(q.ID, 10),
+	)
 	writeJSON(w, http.StatusOK, q)
 }
 
@@ -627,7 +712,22 @@ func (s *Server) handleAdminUpdateQrcode(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if oldImage != "" {
-		s.removeUploadFile(oldImage)
+		if req.ImageURL != nil {
+			s.attachUploadedMedia(
+				r, principalFromRequest(r), *req.ImageURL, "site", "qrcode",
+				strconv.FormatInt(id, 10),
+			)
+		}
+		if req.ImageURL == nil || oldImage != *req.ImageURL {
+			s.releaseAndCleanup(
+				r, oldImage, "site", "qrcode", strconv.FormatInt(id, 10),
+			)
+		}
+	} else if req.ImageURL != nil {
+		s.attachUploadedMedia(
+			r, principalFromRequest(r), *req.ImageURL, "site", "qrcode",
+			strconv.FormatInt(id, 10),
+		)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": "true"})
 }
@@ -643,7 +743,9 @@ func (s *Server) handleAdminDeleteQrcode(w http.ResponseWriter, r *http.Request)
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	s.removeUploadFile(imageURL)
+	s.releaseAndCleanup(
+		r, imageURL, "site", "qrcode", strconv.FormatInt(id, 10),
+	)
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "ok": "true"})
 }
 
@@ -865,13 +967,37 @@ func (s *Server) handleAdminClearQuestions(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) handleAdminClearBackgrounds(w http.ResponseWriter, r *http.Request) {
+	backgrounds, err := s.svc.AllBackgrounds(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	for _, background := range backgrounds {
+		if err := s.media.AssertNoExternalRefs(
+			r.Context(), background.FilePath, "site", "background",
+		); err != nil {
+			writeErrCode(w, http.StatusConflict, "背景图仍被其他资源引用，不能直接删除", "media_in_use")
+			return
+		}
+	}
 	paths, err := s.svc.ClearBackgrounds(r.Context())
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	backgroundIDs := make(map[string]int64, len(backgrounds))
+	for _, background := range backgrounds {
+		backgroundIDs[background.FilePath] = background.ID
+	}
 	for _, p := range paths {
-		s.removeUploadFile(p)
+		if id, ok := backgroundIDs[p]; ok {
+			s.releaseAndCleanup(
+				r, p, "site", "background",
+				strconv.FormatInt(id, 10),
+			)
+		} else {
+			s.removeUploadFile(p)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":                  "true",
@@ -975,6 +1101,10 @@ func (s *Server) handleAdminUploadBackground(w http.ResponseWriter, r *http.Requ
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.attachUploadedMedia(
+		r, principalFromRequest(r), url, "site", "background",
+		strconv.FormatInt(bg.ID, 10),
+	)
 	writeJSON(w, http.StatusOK, bg)
 }
 
@@ -1013,12 +1143,36 @@ func (s *Server) handleAdminDeleteBackground(w http.ResponseWriter, r *http.Requ
 		writeErr(w, http.StatusBadRequest, "id 无效")
 		return
 	}
-	filePath, err := s.svc.DeleteBackground(r.Context(), id)
+	backgrounds, err := s.svc.AllBackgrounds(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var filePath string
+	for _, background := range backgrounds {
+		if background.ID == id {
+			filePath = background.FilePath
+			break
+		}
+	}
+	if filePath == "" {
+		writeErr(w, http.StatusNotFound, "背景图不存在")
+		return
+	}
+	if err := s.assertMediaUnreferenced(
+		r, filePath, "site", "background", strconv.FormatInt(id, 10),
+	); err != nil {
+		writeErrCode(w, http.StatusConflict, err.Error(), "media_in_use")
+		return
+	}
+	filePath, err = s.svc.DeleteBackground(r.Context(), id)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	_ = os.Remove(filepath.Join(s.cfg.UploadDir, filepath.Base(filePath)))
+	s.releaseAndCleanup(
+		r, filePath, "site", "background", strconv.FormatInt(id, 10),
+	)
 	writeJSON(w, http.StatusOK, map[string]any{"id": id, "ok": "true"})
 }
 
@@ -1052,12 +1206,18 @@ func (s *Server) handleAdminSaveFooter(w http.ResponseWriter, r *http.Request) {
 	// 图标被替换/清空后清理旧文件
 	if old != nil {
 		if old.ICPIcon != req.ICPIcon {
-			s.removeUploadFile(old.ICPIcon)
+			s.releaseAndCleanup(r, old.ICPIcon, "site", "footer_icon", "icp")
 		}
 		if old.PoliceIcon != req.PoliceIcon {
-			s.removeUploadFile(old.PoliceIcon)
+			s.releaseAndCleanup(r, old.PoliceIcon, "site", "footer_icon", "police")
 		}
 	}
+	s.attachUploadedMedia(
+		r, principalFromRequest(r), req.ICPIcon, "site", "footer_icon", "icp",
+	)
+	s.attachUploadedMedia(
+		r, principalFromRequest(r), req.PoliceIcon, "site", "footer_icon", "police",
+	)
 	writeJSON(w, http.StatusOK, map[string]string{"ok": "true"})
 }
 
@@ -1087,7 +1247,10 @@ func (s *Server) handleAdminSaveLogo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if old != "" && old != url {
-		s.removeUploadFile(old)
+		s.releaseAndCleanup(r, old, "site", "logo", "1")
 	}
+	s.attachUploadedMedia(
+		r, principalFromRequest(r), url, "site", "logo", "1",
+	)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": "true", "logo_url": url})
 }

@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+"""Validate migration idempotence and baseline data retention in Docker."""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import time
+import urllib.request
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+PROJECT = os.environ.get("COMPOSE_PROJECT", "stpt-foundation-test")
+COMPOSE = ["docker", "compose", "-p", PROJECT, "-f", "deploy/docker-compose.yml"]
+PG_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "szyca")
+
+
+def psql(query: str) -> str:
+    result = subprocess.run(
+        [
+            *COMPOSE,
+            "exec",
+            "-T",
+            "szyca",
+            "env",
+            f"PGPASSWORD={PG_PASSWORD}",
+            "psql",
+            "-h",
+            "127.0.0.1",
+            "-U",
+            "szyca",
+            "-d",
+            "szyca",
+            "-Atc",
+            query,
+        ],
+        cwd=ROOT,
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    return result.stdout.strip()
+
+
+def wait_ready(timeout: int = 60) -> None:
+    port = os.environ.get("WEB_PORT", "8092")
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(f"http://localhost:{port}/readyz", timeout=2) as resp:
+                if resp.status == 200:
+                    return
+        except OSError:
+            pass
+        time.sleep(1)
+    raise TimeoutError("container did not become ready")
+
+
+def data_counts() -> dict[str, int]:
+    raw = psql(
+        """
+        SELECT json_build_object(
+          'users', (SELECT count(*) FROM users),
+          'questions', (SELECT count(*) FROM questions),
+          'attempts', (SELECT count(*) FROM attempts),
+          'qrcodes', (SELECT count(*) FROM qrcodes),
+          'backgrounds', (SELECT count(*) FROM backgrounds),
+          'sections', (SELECT count(*) FROM home_sections)
+        )
+        """
+    )
+    return json.loads(raw)
+
+
+def main() -> None:
+    wait_ready()
+    versions = psql("SELECT version FROM schema_migrations ORDER BY version").splitlines()
+    assert versions == [
+        "0001_quiz_baseline.sql",
+        "0002_site_access_media.sql",
+        "0003_lottery.sql",
+    ], versions
+
+    before = data_counts()
+    subprocess.run(["docker", "restart", "szyca"], cwd=ROOT, check=True, capture_output=True)
+    wait_ready()
+
+    after = data_counts()
+    assert before == after, f"data changed across restart: {before} != {after}"
+    versions_after = psql("SELECT version FROM schema_migrations ORDER BY version").splitlines()
+    assert versions_after == versions, "migrations were applied twice"
+    print(
+        "migration ok: three versions applied once; restart retained "
+        + json.dumps(after, ensure_ascii=False, sort_keys=True)
+    )
+
+
+if __name__ == "__main__":
+    main()
