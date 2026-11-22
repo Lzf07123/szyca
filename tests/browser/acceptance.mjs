@@ -379,8 +379,32 @@ async function main() {
       await revealForScreenshot(page)
       await page.screenshot({ path: `${ARTIFACTS}/screenshots/home-off-${width}.jpg`, fullPage: true, type: 'jpeg', quality: 78 })
       if (width === 320) {
+        const beforeMenu = await page.evaluate(() => ({
+          header: document.querySelector('.public-topbar').getBoundingClientRect().height,
+          main: document.querySelector('main').getBoundingClientRect().top,
+        }))
         await page.getByRole('button', { name: '打开导航' }).click()
         await page.locator('#site-navigation').waitFor({ state: 'visible' })
+        await page.waitForTimeout(220)
+        const openMenu = await page.evaluate(() => {
+          const header = document.querySelector('.public-topbar')
+          const nav = document.querySelector('#site-navigation')
+          const main = document.querySelector('main')
+          const rect = nav.getBoundingClientRect()
+          return {
+            header: header.getBoundingClientRect().height,
+            main: main.getBoundingClientRect().top,
+            position: getComputedStyle(nav).position,
+            height: Math.round(rect.height),
+            width: Math.round(rect.width),
+            viewport: innerWidth,
+          }
+        })
+        expect(Math.abs(openMenu.header - beforeMenu.header) <= 1, 'mobile menu changed header height')
+        expect(Math.abs(openMenu.main - beforeMenu.main) <= 1, 'mobile menu pushed page content down')
+        expect(openMenu.position === 'absolute', `mobile menu should be an overlay, got ${openMenu.position}`)
+        expect(openMenu.height <= 170, `mobile menu overlay is too tall (${openMenu.height}px)`)
+        expect(openMenu.width <= openMenu.viewport - 20, 'mobile menu overlay overflows viewport gutters')
         expect(await page.locator('#site-navigation a[href="/lottery"]').count() === 0, 'closed lottery appeared in navigation')
         await assertNoOverflow(page, 'home-menu-320')
         await assertTouchTargets(page, 'home-menu-320')
@@ -392,6 +416,12 @@ async function main() {
           quality: 82,
         })
         await page.keyboard.press('Escape')
+        await page.waitForTimeout(220)
+        expect(!(await page.locator('#site-navigation').isVisible()), 'Escape did not close the mobile menu')
+        expect(
+          await page.evaluate(() => document.activeElement?.classList.contains('nav-toggle')),
+          'Escape did not return focus to the menu trigger',
+        )
       }
       if (width === 390) {
         await axeCheck(page, `home-${width}`)
@@ -439,6 +469,25 @@ async function main() {
         await assertNoOverflow(page, label)
         await assertReadableText(page, label)
         if (path !== '/screen') await assertFramedChrome(page, label)
+        if (['/join', '/quiz', '/lottery'].includes(path)) {
+          const intro = await page.locator('.page-intro').evaluate((element) => {
+            const style = getComputedStyle(element)
+            const title = getComputedStyle(element.querySelector('h1'))
+            const rect = element.getBoundingClientRect()
+            return {
+              align: style.textAlign,
+              border: parseFloat(style.borderTopWidth),
+              background: style.backgroundColor,
+              width: Math.round(rect.width),
+              titleSize: parseFloat(title.fontSize),
+            }
+          })
+          expect(intro.align === 'center', `${label}: page intro is not centered`)
+          expect(intro.border === 0, `${label}: page intro still has a frame`)
+          expect(intro.background === 'rgba(0, 0, 0, 0)', `${label}: page intro still has a panel background`)
+          expect(intro.width <= 760, `${label}: page intro is too wide`)
+          expect(intro.titleSize <= 56, `${label}: page intro title is too large (${intro.titleSize}px)`)
+        }
         if (path === '/lottery' && [390, 768, 1440].includes(width)) {
           await revealForScreenshot(page)
           await page.screenshot({
@@ -447,6 +496,18 @@ async function main() {
             type: 'jpeg',
             quality: 82,
           })
+        }
+        if ((path === '/join' || path === '/quiz') && [390, 1440].includes(width)) {
+          await revealForScreenshot(page)
+          await page.screenshot({
+            path: `${ARTIFACTS}/screenshots/${path.slice(1)}-${width}.jpg`,
+            fullPage: true,
+            type: 'jpeg',
+            quality: 82,
+          })
+        }
+        if ((path === '/join' || path === '/quiz') && width === 390) {
+          await axeCheck(page, path.slice(1))
         }
         if (path === '/lottery' && width === 390) {
           await axeCheck(page, 'lottery')

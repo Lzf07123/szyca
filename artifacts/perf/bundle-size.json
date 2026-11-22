@@ -18,13 +18,13 @@
     ]
   },
   "current": {
-    "raw_bytes": 225033,
-    "gzip_bytes": 74875,
+    "raw_bytes": 225454,
+    "gzip_bytes": 75015,
     "files": [
       {
-        "path": "/assets/index-eTwCr0cx.js",
-        "raw_bytes": 18233,
-        "gzip_bytes": 7539
+        "path": "/assets/index-Cj8oDAil.js",
+        "raw_bytes": 18654,
+        "gzip_bytes": 7679
       },
       {
         "path": "/assets/react-zJRiRjam.js",
@@ -33,7 +33,7 @@
       }
     ]
   },
-  "raw_growth_percent": -44.67970559169285,
+  "raw_growth_percent": -44.576210353457135,
   "criterion": "initial JS growth <= 10%",
   "passed": true
 }
