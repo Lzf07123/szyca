@@ -1,0 +1,142 @@
+/*!
+ * szyca · Digital Deep Space template v1.0.0
+ * Project-owned visual layer; no Li&Design submodule dependency.
+ * Generated snapshot from frontend/src/index.css
+ * source-sha256: 299de329351eada9f8247dd5954a48ebac0bfc7c581129e738aa90a233021413
+ * Do not edit directly. Run scripts/export_design_template.py --write.
+ */
+:root {
+  color-scheme: dark;
+
+  /* Digital deep space · the only runtime token source */
+  --bg-950: #05070b;
+  --bg-900: #080b13;
+  --bg-850: #0a0e1a;
+  --bg-800: #0d1422;
+  --bg-750: #111a2a;
+  --accent-primary: #00e5ff;
+  --accent-secondary: #8b5cf6;
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-tertiary: #5f6b78;
+  --line-subtle: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.14);
+  --surface-glass: rgba(255, 255, 255, 0.03);
+  --surface-raised: rgba(255, 255, 255, 0.05);
+  --success: #3fb950;
+  --warning: #d29922;
+  --error: #f85149;
+  --font-sans: 'Noto Sans SC Variable', 'Noto Sans SC', 'Source Han Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-display: 'Space Grotesk Variable', 'Space Grotesk', 'Noto Sans SC Variable', 'Noto Sans SC', 'PingFang SC', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  --grid-size: 56px;
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --page-gutter: clamp(16px, 4vw, 64px);
+  --page-max: 1280px;
+  --header-height: 68px;
+  --section-space: clamp(72px, 8vw, 128px);
+  --section-heading-space: clamp(32px, 4vw, 56px);
+  --page-tail-space: clamp(64px, 8vw, 112px);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+  --motion-fast: 160ms;
+  --motion-base: 260ms;
+  --motion-slow: 620ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --shadow-soft: 0 18px 48px rgba(0, 0, 0, 0.28);
+  --shadow-float: 0 24px 60px rgba(0, 229, 255, 0.08);
+  --focus-ring: var(--accent-primary);
+  --grid-line: rgba(255, 255, 255, 0.055);
+  --particle-primary: var(--accent-primary);
+  --particle-secondary: var(--accent-secondary);
+
+  /* Backward-compatible aliases consumed by existing business pages. */
+  --space-950: var(--bg-950);
+  --space-900: var(--bg-900);
+  --space-800: var(--bg-800);
+  --space-700: var(--bg-750);
+  --space-600: #182337;
+  --ice-50: var(--bg-950);
+  --ice-100: var(--bg-850);
+  --ice-200: rgba(255, 255, 255, 0.1);
+  --ice-300: rgba(255, 255, 255, 0.16);
+  --ink: var(--text-primary);
+  --ink-muted: var(--text-secondary);
+  --brand-800: #00c9e0;
+  --brand-700: #00b9d1;
+  --brand-500: var(--accent-primary);
+  --brand-300: #6bf0ff;
+  --brand-200: #a6f6ff;
+  --brand-100: rgba(0, 229, 255, 0.1);
+  --solar-700: #7041d8;
+  --solar-600: var(--accent-secondary);
+  --solar-400: #a78bfa;
+  --solar-200: #c4b5fd;
+  --solar-100: rgba(139, 92, 246, 0.1);
+  --sky-600: #4e7b9a;
+  --danger-600: var(--error);
+  --danger-100: rgba(248, 81, 73, 0.1);
+  --warning-700: var(--warning);
+  --warning-100: rgba(210, 153, 34, 0.1);
+  --on-space: var(--text-primary);
+  --on-space-muted: var(--text-secondary);
+  --on-space-soft: #c7d0d9;
+  --bg: var(--bg-950);
+  --bg2: var(--bg-900);
+  --card: var(--surface-glass);
+  --border: var(--line-subtle);
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --red: var(--error);
+  --blue: var(--accent-primary);
+  --green: var(--success);
+  --gold: var(--warning);
+  --silver: #9ba7b4;
+  --bronze: #c98b52;
+  --font-pixel: var(--font-display);
+  --font-retro: var(--font-mono);
+  --seaglass-deep: var(--accent-primary);
+  --seaglass-light: var(--brand-300);
+  --paper: var(--bg-950);
+  --surface: var(--surface-glass);
+  --surface-soft: rgba(255, 255, 255, 0.025);
+  --surface-warm: rgba(139, 92, 246, 0.06);
+  --surface-brand: rgba(0, 229, 255, 0.07);
+  --surface-danger: rgba(248, 81, 73, 0.08);
+  --line: var(--line-subtle);
+  --accent: var(--accent-primary);
+  --accent-strong: var(--accent-primary);
+  --accent-soft: rgba(139, 92, 246, 0.2);
+  --accent-wash: rgba(0, 229, 255, 0.08);
+  --grid-line: rgba(255, 255, 255, 0.055);
+  --space-border: rgba(0, 229, 255, 0.16);
+  --space-line: var(--line-subtle);
+  --space-panel: rgba(10, 14, 26, 0.92);
+  --space-veil: rgba(5, 7, 11, 0.9);
+  --space-glow: 0 0 32px rgba(0, 229, 255, 0.12);
+  --accent-glow: 0 0 32px rgba(139, 92, 246, 0.16);
+}
+
+.app.fullscreen {
+  --bg: var(--bg-950);
+  --bg2: var(--bg-900);
+  --card: var(--surface-glass);
+  --border: var(--line-subtle);
+  --text: var(--text-primary);
+  --muted: var(--text-secondary);
+  --red: var(--error);
+  --blue: var(--accent-primary);
+  --green: var(--success);
+  --gold: var(--warning);
+  --silver: #9ba7b4;
+  --bronze: #c98b52;
+}
