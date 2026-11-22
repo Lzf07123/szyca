@@ -201,6 +201,61 @@ async function assertReadableText(page, label) {
   expect(issues.length === 0, `${label}: distorted text ${JSON.stringify(issues)}`)
 }
 
+async function assertFramedChrome(page, label) {
+  const chrome = await page.evaluate(() => {
+    const header = document.querySelector('.public-topbar')
+    const footer = document.querySelector('.public-footer')
+    const main = document.querySelector('main')
+    if (!header || !footer || !main) return null
+    const headerStyle = getComputedStyle(header)
+    const footerStyle = getComputedStyle(footer)
+    const headerRect = header.getBoundingClientRect()
+    const footerRect = footer.getBoundingClientRect()
+    const mainRect = main.getBoundingClientRect()
+    return {
+      viewport: window.innerWidth,
+      header: {
+        top: Math.round(headerRect.top),
+        bottom: Math.round(headerRect.bottom),
+        height: Math.round(headerRect.height),
+        left: Math.round(headerRect.left),
+        right: Math.round(headerRect.right),
+        radius: parseFloat(headerStyle.borderTopLeftRadius),
+        position: headerStyle.position,
+        backdrop: headerStyle.backdropFilter,
+        borderWidth: parseFloat(headerStyle.borderBottomWidth),
+      },
+      footer: {
+        top: Math.round(footerRect.top),
+        height: Math.round(footerRect.height),
+        left: Math.round(footerRect.left),
+        right: Math.round(footerRect.right),
+        radius: parseFloat(footerStyle.borderTopLeftRadius),
+        backdrop: footerStyle.backdropFilter,
+        borderWidth: parseFloat(footerStyle.borderTopWidth),
+      },
+      main: {
+        top: Math.round(mainRect.top),
+        bottom: Math.round(mainRect.bottom),
+      },
+    }
+  })
+  if (!chrome) return
+  expect(chrome.header.position === 'sticky', `${label}: header is not sticky`)
+  expect(chrome.header.top === 0, `${label}: sticky header does not sit at viewport top`)
+  expect(chrome.header.left <= 1 && chrome.header.right >= chrome.viewport - 1, `${label}: header is not full width`)
+  expect(chrome.footer.left <= 1 && chrome.footer.right >= chrome.viewport - 1, `${label}: footer is not full width`)
+  expect(chrome.header.radius <= 1 && chrome.footer.radius <= 1, `${label}: chrome uses floating-card corners`)
+  expect(chrome.header.height <= 64, `${label}: header is too tall (${chrome.header.height}px)`)
+  expect(chrome.header.borderWidth === 0 && chrome.footer.borderWidth === 0, `${label}: chrome has a hard divider`)
+  expect(chrome.header.backdrop.includes('blur'), `${label}: header is missing frosted blur`)
+  expect(chrome.footer.backdrop.includes('blur'), `${label}: footer is missing frosted blur`)
+  const maxFooterHeight = chrome.viewport <= 719 ? 170 : chrome.viewport <= 1023 ? 118 : 96
+  expect(chrome.footer.height <= maxFooterHeight, `${label}: footer is too tall (${chrome.footer.height}px)`)
+  expect(chrome.main.top >= chrome.header.bottom - 1, `${label}: header overlaps main content`)
+  expect(chrome.footer.top >= chrome.main.bottom - 1, `${label}: footer overlaps main content`)
+}
+
 async function axeCheck(page, label) {
   await page.addScriptTag({ content: axe.source })
   const result = await page.evaluate(async () => {
@@ -240,11 +295,20 @@ async function main() {
       await assertNoOverflow(page, `home-off-${width}`)
       await assertTouchTargets(page, `home-off-${width}`)
       await assertReadableText(page, `home-off-${width}`)
+      await assertFramedChrome(page, `home-off-${width}`)
       await page.screenshot({ path: `${ARTIFACTS}/screenshots/home-off-${width}.jpg`, fullPage: true, type: 'jpeg', quality: 78 })
       if (width === 320) {
         await page.getByRole('button', { name: '打开导航' }).click()
         await page.locator('#site-navigation').waitFor({ state: 'visible' })
         expect(await page.locator('#site-navigation a[href="/lottery"]').count() === 0, 'closed lottery appeared in navigation')
+        await assertNoOverflow(page, 'home-menu-320')
+        await assertTouchTargets(page, 'home-menu-320')
+        await page.screenshot({
+          path: `${ARTIFACTS}/screenshots/home-menu-320.jpg`,
+          fullPage: false,
+          type: 'jpeg',
+          quality: 82,
+        })
         await page.keyboard.press('Escape')
       }
       if (width === 390) {
@@ -262,6 +326,7 @@ async function main() {
       await page.goto(BASE + '/', { waitUntil: 'networkidle' })
       await assertNoOverflow(page, `home-on-${width}`)
       await assertReadableText(page, `home-on-${width}`)
+      await assertFramedChrome(page, `home-on-${width}`)
       expect(await page.locator('#site-navigation a[href="/lottery"]').count() === 1, `home-on-${width}: lottery nav missing`)
       expect(await page.locator('#lottery').count() === 1, `home-on-${width}: lottery section missing`)
       await page.screenshot({ path: `${ARTIFACTS}/screenshots/home-on-${width}.jpg`, fullPage: true, type: 'jpeg', quality: 78 })
@@ -289,6 +354,7 @@ async function main() {
         titles.add(title)
         await assertNoOverflow(page, label)
         await assertReadableText(page, label)
+        if (path !== '/screen') await assertFramedChrome(page, label)
         if (path === '/lottery' && [390, 768, 1440].includes(width)) {
           await page.screenshot({
             path: `${ARTIFACTS}/screenshots/lottery-on-${width}.jpg`,
@@ -312,6 +378,7 @@ async function main() {
     await assertNoOverflow(landscapePage, 'home-landscape-844x390')
     await assertTouchTargets(landscapePage, 'home-landscape-844x390')
     await assertReadableText(landscapePage, 'home-landscape-844x390')
+    await assertFramedChrome(landscapePage, 'home-landscape-844x390')
     await landscapePage.screenshot({
       path: `${ARTIFACTS}/screenshots/home-landscape-844x390.jpg`,
       fullPage: true,
@@ -340,6 +407,7 @@ async function main() {
     await adminPage.getByText('抽奖总开关').waitFor({ state: 'visible' })
     await assertNoOverflow(adminPage, 'admin-lottery')
     await assertReadableText(adminPage, 'admin-lottery')
+    await assertFramedChrome(adminPage, 'admin-lottery')
     const storage = await adminPage.evaluate(() => ({
       local: JSON.stringify(window.localStorage),
       session: JSON.stringify(window.sessionStorage),
