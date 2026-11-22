@@ -6,6 +6,7 @@ const BASE = process.env.BASE_URL || 'http://localhost:8091'
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'owner'
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'integrity-test'
 const ARTIFACTS = process.env.ARTIFACT_DIR || '/artifacts/browser'
+const BROWSER_EXECUTABLE_PATH = process.env.BROWSER_EXECUTABLE_PATH || ''
 const widths = [320, 360, 390, 414, 480, 600, 768, 820, 900, 1024, 1180, 1280, 1440, 1920]
 const errors = []
 
@@ -135,7 +136,7 @@ async function assertNoOverflow(page, label) {
 
 async function assertTouchTargets(page, label) {
   const small = await page.evaluate(() => {
-    const selectors = '.public-topbar a, .public-topbar button, .nav-toggle, .btn, .text-link, .footer-links a'
+    const selectors = '.public-topbar a, .public-topbar button, .nav-toggle, .btn, .text-link, .module-card a, .footer-links a'
     return Array.from(document.querySelectorAll(selectors))
       .filter((element) => {
         const style = getComputedStyle(element)
@@ -156,6 +157,10 @@ async function assertReadableText(page, label) {
     const selectors = [
       '.hero-copy',
       '.hero-title-line',
+      '.whoami-grid',
+      '.modules-heading',
+      '.module-card',
+      '.module-copy h3',
       '.home-section h2',
       '.section-heading > div',
       '.action-section > div',
@@ -246,14 +251,64 @@ async function assertFramedChrome(page, label) {
   expect(chrome.header.left <= 1 && chrome.header.right >= chrome.viewport - 1, `${label}: header is not full width`)
   expect(chrome.footer.left <= 1 && chrome.footer.right >= chrome.viewport - 1, `${label}: footer is not full width`)
   expect(chrome.header.radius <= 1 && chrome.footer.radius <= 1, `${label}: chrome uses floating-card corners`)
-  expect(chrome.header.height <= 64, `${label}: header is too tall (${chrome.header.height}px)`)
-  expect(chrome.header.borderWidth === 0 && chrome.footer.borderWidth === 0, `${label}: chrome has a hard divider`)
+  expect(chrome.header.height <= 72, `${label}: header is too tall (${chrome.header.height}px)`)
+  expect(chrome.header.borderWidth <= 1 && chrome.footer.borderWidth <= 1, `${label}: chrome has a hard divider`)
   expect(chrome.header.backdrop.includes('blur'), `${label}: header is missing frosted blur`)
   expect(chrome.footer.backdrop.includes('blur'), `${label}: footer is missing frosted blur`)
-  const maxFooterHeight = chrome.viewport <= 719 ? 170 : chrome.viewport <= 1023 ? 118 : 96
+  const maxFooterHeight = chrome.viewport <= 820 ? 170 : chrome.viewport <= 1023 ? 118 : 96
   expect(chrome.footer.height <= maxFooterHeight, `${label}: footer is too tall (${chrome.footer.height}px)`)
   expect(chrome.main.top >= chrome.header.bottom - 1, `${label}: header overlaps main content`)
   expect(chrome.footer.top >= chrome.main.bottom - 1, `${label}: footer overlaps main content`)
+}
+
+async function assertCosmosHome(page, label) {
+  const cosmos = await page.evaluate(() => {
+    const canvas = document.querySelector('.cosmic-canvas')
+    const grid = document.querySelector('.cosmic-grid')
+    const logo = document.querySelector('.logo-mark')
+    const moduleGrid = document.querySelector('.module-grid')
+    return {
+      canvas: canvas instanceof HTMLCanvasElement,
+      nodes: canvas?.getAttribute('data-nodes'),
+      linkDistance: canvas?.getAttribute('data-link-distance'),
+      gravityDistance: canvas?.getAttribute('data-gravity-distance'),
+      gridSize: getComputedStyle(grid).backgroundSize,
+      logoTransform: getComputedStyle(logo, '::before').transform,
+      logoGradient: getComputedStyle(logo, '::before').backgroundImage,
+      moduleCount: document.querySelectorAll('.module-card').length,
+      moduleColumns: getComputedStyle(moduleGrid).gridTemplateColumns.split(' ').length,
+      bootCommand: document.querySelector('.boot-command')?.textContent ?? '',
+      terminalText: document.querySelector('.terminal-card')?.textContent ?? '',
+      footerText: document.querySelector('.footer-terminal')?.textContent ?? '',
+      notoReady: document.fonts.check('300 40px "Noto Sans SC Variable"'),
+      displayReady: document.fonts.check('400 20px "Space Grotesk Variable"'),
+      monoReady: document.fonts.check('400 12px "JetBrains Mono Variable"'),
+    }
+  })
+  expect(cosmos.canvas, `${label}: particle canvas missing`)
+  expect(cosmos.nodes === '90', `${label}: expected 90 particles, got ${cosmos.nodes}`)
+  expect(cosmos.linkDistance === '110', `${label}: expected 110px links, got ${cosmos.linkDistance}`)
+  expect(cosmos.gravityDistance === '190', `${label}: missing pointer gravity contract`)
+  expect(cosmos.gridSize.includes('56px'), `${label}: 56px grid missing (${cosmos.gridSize})`)
+  expect(cosmos.logoTransform !== 'none', `${label}: rotated logo mark missing`)
+  expect(cosmos.logoGradient.includes('conic-gradient'), `${label}: conic logo gradient missing`)
+  expect(cosmos.moduleCount === 3, `${label}: expected three core modules, got ${cosmos.moduleCount}`)
+  expect(cosmos.moduleColumns === (page.viewportSize().width <= 820 ? 1 : 3), `${label}: module grid breakpoint failed`)
+  expect(cosmos.bootCommand.includes('boot nebula_os') && cosmos.bootCommand.includes('[OK]'), `${label}: boot line missing`)
+  expect(cosmos.terminalText.includes('computer_association'), `${label}: terminal identity missing`)
+  expect(cosmos.footerText.includes('EOF') && cosmos.footerText.includes('感谢阅读到底部'), `${label}: EOF footer missing`)
+  expect(cosmos.notoReady && cosmos.displayReady && cosmos.monoReady, `${label}: required variable fonts did not load`)
+}
+
+async function revealForScreenshot(page) {
+  await page.evaluate(() => {
+    document.querySelectorAll('[data-reveal]').forEach((element) => {
+      element.style.setProperty('--reveal-delay', '0ms')
+      element.style.transition = 'none'
+      element.classList.add('is-revealed')
+    })
+  })
+  await page.waitForTimeout(50)
 }
 
 async function axeCheck(page, label) {
@@ -280,7 +335,10 @@ async function main() {
   const originalLotterySection = await setLotterySection(admin, false)
   const campaignID = await ensureCampaign(admin)
 
-  const browser = await chromium.launch({ headless: true })
+  const browser = await chromium.launch({
+    headless: true,
+    ...(BROWSER_EXECUTABLE_PATH ? { executablePath: BROWSER_EXECUTABLE_PATH } : {}),
+  })
   try {
     for (const width of widths) {
       const context = await browser.newContext({ viewport: { width, height: 900 } })
@@ -296,6 +354,29 @@ async function main() {
       await assertTouchTargets(page, `home-off-${width}`)
       await assertReadableText(page, `home-off-${width}`)
       await assertFramedChrome(page, `home-off-${width}`)
+      await assertCosmosHome(page, `home-off-${width}`)
+      if (width === 1440) {
+        const beforeScroll = await page.locator('.whoami-section').evaluate((element) => getComputedStyle(element).opacity)
+        await page.locator('.whoami-section').scrollIntoViewIfNeeded()
+        await page.waitForTimeout(900)
+        const afterScroll = await page.locator('.whoami-section').evaluate((element) => getComputedStyle(element).opacity)
+        expect(beforeScroll === '0', `home reveal should start hidden, got ${beforeScroll}`)
+        expect(afterScroll === '1', `home reveal did not enter, got ${afterScroll}`)
+        const moduleCard = page.locator('.module-card').first()
+        await moduleCard.scrollIntoViewIfNeeded()
+        await page.waitForTimeout(900)
+        const normalBorder = await moduleCard.evaluate((element) => getComputedStyle(element).borderColor)
+        await moduleCard.hover()
+        await page.waitForTimeout(320)
+        const hover = await moduleCard.evaluate((element) => {
+          const style = getComputedStyle(element)
+          return { transform: style.transform, borderColor: style.borderColor, shadow: style.boxShadow }
+        })
+        expect(hover.transform !== 'none', 'module card hover does not lift')
+        expect(hover.borderColor !== normalBorder, `module card hover border did not change: ${hover.borderColor}`)
+        expect(hover.shadow !== 'none', 'module card hover glow missing')
+      }
+      await revealForScreenshot(page)
       await page.screenshot({ path: `${ARTIFACTS}/screenshots/home-off-${width}.jpg`, fullPage: true, type: 'jpeg', quality: 78 })
       if (width === 320) {
         await page.getByRole('button', { name: '打开导航' }).click()
@@ -303,6 +384,7 @@ async function main() {
         expect(await page.locator('#site-navigation a[href="/lottery"]').count() === 0, 'closed lottery appeared in navigation')
         await assertNoOverflow(page, 'home-menu-320')
         await assertTouchTargets(page, 'home-menu-320')
+        await revealForScreenshot(page)
         await page.screenshot({
           path: `${ARTIFACTS}/screenshots/home-menu-320.jpg`,
           fullPage: false,
@@ -327,8 +409,10 @@ async function main() {
       await assertNoOverflow(page, `home-on-${width}`)
       await assertReadableText(page, `home-on-${width}`)
       await assertFramedChrome(page, `home-on-${width}`)
+      await assertCosmosHome(page, `home-on-${width}`)
       expect(await page.locator('#site-navigation a[href="/lottery"]').count() === 1, `home-on-${width}: lottery nav missing`)
       expect(await page.locator('#lottery').count() === 1, `home-on-${width}: lottery section missing`)
+      await revealForScreenshot(page)
       await page.screenshot({ path: `${ARTIFACTS}/screenshots/home-on-${width}.jpg`, fullPage: true, type: 'jpeg', quality: 78 })
       await context.close()
     }
@@ -356,6 +440,7 @@ async function main() {
         await assertReadableText(page, label)
         if (path !== '/screen') await assertFramedChrome(page, label)
         if (path === '/lottery' && [390, 768, 1440].includes(width)) {
+          await revealForScreenshot(page)
           await page.screenshot({
             path: `${ARTIFACTS}/screenshots/lottery-on-${width}.jpg`,
             fullPage: true,
@@ -379,6 +464,8 @@ async function main() {
     await assertTouchTargets(landscapePage, 'home-landscape-844x390')
     await assertReadableText(landscapePage, 'home-landscape-844x390')
     await assertFramedChrome(landscapePage, 'home-landscape-844x390')
+    await assertCosmosHome(landscapePage, 'home-landscape-844x390')
+    await revealForScreenshot(landscapePage)
     await landscapePage.screenshot({
       path: `${ARTIFACTS}/screenshots/home-landscape-844x390.jpg`,
       fullPage: true,
@@ -393,6 +480,7 @@ async function main() {
     await attachDiagnostics(offPage, 'lottery-off')
     await offPage.goto(BASE + '/lottery', { waitUntil: 'networkidle' })
     expect(await offPage.getByText('抽奖模块尚未启用').count() === 1, 'disabled lottery route did not show unavailable state')
+    await revealForScreenshot(offPage)
     await offPage.screenshot({ path: `${ARTIFACTS}/screenshots/lottery-off-390.jpg`, fullPage: true, type: 'jpeg', quality: 82 })
     await offContext.close()
 
@@ -403,6 +491,14 @@ async function main() {
     await adminPage.getByLabel('用户名').fill(ADMIN_USERNAME)
     await adminPage.getByLabel('密码').fill(ADMIN_PASSWORD)
     await adminPage.getByRole('button', { name: '登录' }).click()
+    await adminPage.locator('.admin-overview').waitFor({ state: 'visible' })
+    expect(await adminPage.locator('.stat-card').count() === 4, 'admin overview stat cards missing')
+    expect(await adminPage.locator('.bar-column').count() === 5, 'admin overview bar chart missing')
+    expect(await adminPage.locator('.runtime-table tbody tr').count() >= 6, 'admin overview runtime table missing')
+    expect(await adminPage.locator('.terminal-log-card pre').count() === 1, 'admin overview terminal log missing')
+    await assertNoOverflow(adminPage, 'admin-overview')
+    await adminPage.screenshot({ path: `${ARTIFACTS}/screenshots/admin-overview-390.jpg`, fullPage: true, type: 'jpeg', quality: 82 })
+    await axeCheck(adminPage, 'admin-overview')
     await adminPage.getByRole('button', { name: '抽奖' }).click()
     await adminPage.getByText('抽奖总开关').waitFor({ state: 'visible' })
     await assertNoOverflow(adminPage, 'admin-lottery')
@@ -430,9 +526,16 @@ async function main() {
     const reducedState = await reducedPage.evaluate(() => ({
       reduced: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
       canvases: document.querySelectorAll('canvas').length,
+      particleNodes: document.querySelector('.cosmic-canvas')?.getAttribute('data-nodes'),
+      hiddenReveal: Array.from(document.querySelectorAll('[data-reveal]'))
+        .filter((element) => getComputedStyle(element).opacity !== '1').length,
+      cursorAnimation: getComputedStyle(document.querySelector('.terminal-cursor')).animationName,
     }))
     expect(reducedState.reduced, 'reduced-motion media query was not applied')
-    expect(reducedState.canvases === 0, `reduced motion still rendered particles: ${reducedState.canvases}`)
+    expect(reducedState.canvases === 1, `reduced motion should keep one static canvas: ${reducedState.canvases}`)
+    expect(reducedState.particleNodes === '90', 'reduced motion canvas lost its 90-node constellation')
+    expect(reducedState.hiddenReveal === 0, 'reduced motion left content hidden')
+    expect(reducedState.cursorAnimation === 'none', 'reduced motion kept the cursor blinking')
     await reduced.close()
 
     const fallback = await browser.newContext({ viewport: { width: 390, height: 844 } })

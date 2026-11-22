@@ -5,8 +5,10 @@ import { router } from './App'
 import { SiteProvider } from './api/site'
 import './index.css'
 import './styles.css'
-import '@fontsource/press-start-2p'
-import '@fontsource/vt323'
+import './cosmos.css'
+import '@fontsource-variable/noto-sans-sc'
+import '@fontsource-variable/space-grotesk'
+import '@fontsource-variable/jetbrains-mono'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

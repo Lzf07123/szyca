@@ -1,6 +1,6 @@
 {
   "baseline_commit": "67e25fe",
-  "current_image": "szyca:release-test",
+  "current_image": "szyca:cosmos-test",
   "baseline": {
     "raw_bytes": 406782,
     "gzip_bytes": 125099,
@@ -18,13 +18,13 @@
     ]
   },
   "current": {
-    "raw_bytes": 221042,
-    "gzip_bytes": 73394,
+    "raw_bytes": 225038,
+    "gzip_bytes": 74882,
     "files": [
       {
-        "path": "/assets/index-D26GyzTi.js",
-        "raw_bytes": 14242,
-        "gzip_bytes": 6058
+        "path": "/assets/index-DSSCXSc_.js",
+        "raw_bytes": 18238,
+        "gzip_bytes": 7546
       },
       {
         "path": "/assets/react-zJRiRjam.js",
@@ -33,7 +33,7 @@
       }
     ]
   },
-  "raw_growth_percent": -45.66082078361383,
+  "raw_growth_percent": -44.67847643209385,
   "criterion": "initial JS growth <= 10%",
   "passed": true
 }
