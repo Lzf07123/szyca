@@ -48,7 +48,11 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.build.yml u
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `ADMIN_PASSWORD` | admin123 | 后台口令（务必修改） |
+| `ADMIN_USERNAME` | owner | 首次启动自动创建的 owner 用户名 |
+| `ADMIN_PASSWORD` | admin123 | 首次启动创建 owner 的初始密码（务必修改） |
+| `ADMIN_COOKIE_SECURE` | false | 后台 Cookie 是否仅 HTTPS 发送；生产必须为 `true` |
+| `ADMIN_SESSION_HOURS` | 8 | 后台会话时长 |
+| `LEGACY_ADMIN_TOKEN_ENABLED` | false | 旧单口令迁移窗口开关，完成切换后保持关闭 |
 | `POSTGRES_PASSWORD` | szyca | 单容器内 PostgreSQL 口令（生产务必修改） |
 | `QUESTION_SECONDS` | 20 | 每题倒计时（秒） |
 | `ANSWER_GRACE_SECONDS` | 20 | 网络抖动/断线补交宽限（秒）；截止时间本身仍以服务端记录为准 |
@@ -86,13 +90,13 @@ scripts/publish_image.sh --push
 
 ## 后台使用速查
 
-1. 访问 `/admin`，输入后台口令验证（错误口令无法进入）
+1. 访问 `/admin`，输入 `ADMIN_USERNAME` 与 `ADMIN_PASSWORD` 创建的管理员账号
 2. **概览**：注册用户/参与答题/累计答题/当前在线/题库/背景/内存/协程/运行时长/DB/Redis
 3. **控制台**：开始/结束答题、特效广播、公告广播、二维码增删改（标题/换图/启停，标题展示在二维码下方）、**导出成绩 CSV**
 4. **题库**：**批量导入**（下载模板，列：题目,选项A~F,正确答案(A-F),难度,分值；「示例」开头行自动跳过）、新增题目、启用/停用
 5. **外观**：站点 Logo 上传（顶栏/首页会徽/大屏标题，按图片比例自动适配、不遮挡光环，并同时作为 favicon；未上传用内置样式，可一键恢复）、页脚信息（拥有人/开源协议/ICP+公安备案号与图标，图标后台上传）、首页背景批量上传（原比例、横向滚动）
 
-## 关键 API（全部 JSON；`*` 需 X-Admin-Token 头）
+## 关键 API（全部 JSON；后台接口使用 HttpOnly Cookie + CSRF）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -107,6 +111,8 @@ scripts/publish_image.sh --push
 | GET | /api/backgrounds · /api/qrcode · /api/config | 前台资源 |
 | GET | /ws?token=… | WebSocket 实时推送（匿名=大屏） |
 | POST | /api/identity/abandon | 放弃身份（需本机 device_fp 归属校验） |
+| POST | /api/admin/auth/login | 管理员登录，设置 HttpOnly/SameSite Cookie 并返回 CSRF token |
+| GET* | /api/admin/auth/me | 当前管理员、角色和权限；刷新 CSRF token |
 | GET* | /api/admin/overview | 系统概览 |
 | GET* | /api/admin/export/scores | 导出成绩 CSV |
 | POST* | /api/admin/questions/import | 批量导入题目 CSV |

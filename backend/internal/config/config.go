@@ -15,6 +15,7 @@ type Config struct {
 	AdminCookieName    string
 	AdminCookieSecure  bool
 	AdminSessionHours  int
+	LegacyAdminToken   bool
 	QuestionSeconds    int
 	AnswerGraceSeconds int
 	QuizCount          int
@@ -47,6 +48,7 @@ func Load() Config {
 		AdminCookieName:    getenv("ADMIN_COOKIE_NAME", "szyca_admin"),
 		AdminCookieSecure:  getenvBool("ADMIN_COOKIE_SECURE", false),
 		AdminSessionHours:  getenvInt("ADMIN_SESSION_HOURS", 8),
+		LegacyAdminToken:   getenvBool("LEGACY_ADMIN_TOKEN_ENABLED", false),
 		QuestionSeconds:    getenvInt("QUESTION_SECONDS", 20),
 		AnswerGraceSeconds: getenvNonNegativeInt("ANSWER_GRACE_SECONDS", 20),
 		QuizCount:          getenvInt("QUESTION_COUNT", 10),

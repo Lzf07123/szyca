@@ -24,7 +24,7 @@ func (s *Server) handleSite(w http.ResponseWriter, r *http.Request) {
 	sum := sha256.Sum256(body)
 	etag := `"` + hex.EncodeToString(sum[:16]) + `"`
 	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "public, max-age=15, stale-while-revalidate=45")
+	w.Header().Set("Cache-Control", "public, max-age=0, must-revalidate")
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return

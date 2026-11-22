@@ -26,7 +26,7 @@ func (s *Server) withAuthenticated(next principalHandler) http.HandlerFunc {
 		var principal access.Principal
 		viaCookie := false
 
-		if legacy := r.Header.Get("X-Admin-Token"); legacy != "" {
+		if legacy := r.Header.Get("X-Admin-Token"); legacy != "" && s.cfg.LegacyAdminToken {
 			if !s.adminAllowed(ip) {
 				w.Header().Set("Retry-After", "300")
 				writeErrCode(w, http.StatusTooManyRequests, "后台口令尝试过多，请 5 分钟后重试", "rate_limited")
@@ -145,17 +145,18 @@ func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ip := s.clientIP(r)
-	if !s.adminAllowed(ip) {
-		w.Header().Set("Retry-After", "300")
-		writeErrCode(w, http.StatusTooManyRequests, "登录失败次数过多，请 5 分钟后重试", "rate_limited")
-		return
-	}
 	var request struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
 	if err := readJSON(r, &request); err != nil {
 		writeErrCode(w, http.StatusBadRequest, "请求体格式错误", "invalid_request")
+		return
+	}
+	rateKey := "login:" + strings.ToLower(strings.TrimSpace(request.Username)) + "|" + ip
+	if !s.adminAllowed(rateKey) {
+		w.Header().Set("Retry-After", "300")
+		writeErrCode(w, http.StatusTooManyRequests, "登录失败次数过多，请 5 分钟后重试", "rate_limited")
 		return
 	}
 	session, err := s.access.Login(
@@ -166,7 +167,7 @@ func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 		r.UserAgent(),
 	)
 	if err != nil {
-		s.recordAdminFailure(ip)
+		s.recordAdminFailure(rateKey)
 		status := http.StatusUnauthorized
 		code := "invalid_credentials"
 		message := "用户名或密码错误"
@@ -178,7 +179,7 @@ func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 		writeErrCode(w, status, message, code)
 		return
 	}
-	s.clearAdminFailures(ip)
+	s.clearAdminFailures(rateKey)
 	http.SetCookie(w, &http.Cookie{
 		Name:     s.cfg.AdminCookieName,
 		Value:    session.Token,
@@ -207,13 +208,34 @@ func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAdminMe(w http.ResponseWriter, r *http.Request, principal access.Principal) {
-	writeJSON(w, http.StatusOK, map[string]any{"account": principal})
+	csrfToken := ""
+	if !principal.Legacy {
+		if cookie, err := r.Cookie(s.cfg.AdminCookieName); err == nil {
+			csrfToken, _ = s.access.RotateCSRF(r.Context(), cookie.Value)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"account":    principal,
+		"csrf_token": csrfToken,
+	})
 }
 
 func (s *Server) handleAdminLogout(w http.ResponseWriter, r *http.Request, principal access.Principal) {
 	if cookie, err := r.Cookie(s.cfg.AdminCookieName); err == nil {
 		_ = s.access.Logout(r.Context(), cookie.Value)
 	}
+	_ = s.audit.Record(
+		r.Context(),
+		principal.ID,
+		principal.Username,
+		"admin.logout",
+		"admin_session",
+		strconv.FormatInt(principal.ID, 10),
+		map[string]any{},
+		map[string]any{},
+		randHex(12),
+		s.clientIP(r),
+	)
 	clearAdminCookie(w, s.cfg.AdminCookieName, s.cfg.AdminCookieSecure)
 	writeJSON(w, http.StatusOK, map[string]string{"ok": "true"})
 }

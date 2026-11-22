@@ -249,6 +249,29 @@ func (s *Service) VerifyCSRF(ctx context.Context, token, csrf string) bool {
 	return subtle.ConstantTimeCompare(sum[:], want) == 1
 }
 
+func (s *Service) RotateCSRF(ctx context.Context, token string) (string, error) {
+	if token == "" {
+		return "", ErrUnauthorized
+	}
+	csrf, err := randomToken()
+	if err != nil {
+		return "", err
+	}
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE admin_sessions
+		SET csrf_hash = $2, last_seen_at = now()
+		WHERE token_hash = $1 AND expires_at > now()`,
+		hashToken(token), hashToken(csrf),
+	)
+	if err != nil {
+		return "", err
+	}
+	if tag.RowsAffected() == 0 {
+		return "", ErrUnauthorized
+	}
+	return csrf, nil
+}
+
 func (s *Service) Logout(ctx context.Context, token string) error {
 	if token == "" {
 		return nil
