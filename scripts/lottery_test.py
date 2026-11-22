@@ -25,10 +25,10 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import site_media_test as admin_api  # noqa: E402
 
 
-BASE = os.environ.get("BASE_URL", "http://localhost:8092").rstrip("/")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "foundation-test")
+BASE = os.environ.get("BASE_URL", "http://localhost:8091").rstrip("/")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "integrity-test")
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "owner")
-PROJECT = os.environ.get("COMPOSE_PROJECT", "stpt-foundation-test")
+PROJECT = os.environ.get("COMPOSE_PROJECT", "stpt-integrity-test")
 PG_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "szyca")
 
 

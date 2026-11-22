@@ -87,6 +87,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/stats", s.withFeature(site.FeatureQuiz, s.handleStats))
 	mux.HandleFunc("POST /api/identity/abandon", s.withFeature(site.FeatureQuiz, s.handleAbandonIdentity))
 	mux.HandleFunc("GET /api/identity/current", s.withFeature(site.FeatureQuiz, s.handleCurrentIdentity))
+	mux.HandleFunc("GET /api/identity/status", s.withFeature(site.FeatureQuiz, s.handleIdentityStatus))
 	mux.HandleFunc("POST /api/session", s.withFeature(site.FeatureQuiz, s.handleSession))
 	mux.HandleFunc("GET /api/rank", s.withFeature(site.FeatureQuiz, s.handleRank))
 	mux.HandleFunc("GET /api/qrcode", s.withFeature(site.FeatureJoin, s.handleQrcode))
@@ -111,6 +112,7 @@ func (s *Server) Handler() http.Handler {
 
 	// 后台：账号会话 + 固定角色权限；旧 X-Admin-Token 仅作迁移期 owner 兼容。
 	mux.HandleFunc("POST /api/admin/auth/login", s.handleAdminLogin)
+	mux.HandleFunc("GET /api/admin/auth/status", s.handleAdminAuthStatus)
 	mux.HandleFunc("GET /api/admin/auth/me", s.withAuthenticated(s.handleAdminMe))
 	mux.HandleFunc("POST /api/admin/auth/logout", s.withAuthenticated(s.handleAdminLogout))
 	mux.HandleFunc("GET /api/admin/accounts", s.withPermission("access.manage", s.handleAdminListAccounts))
@@ -363,6 +365,28 @@ func (s *Server) handleCurrentIdentity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
+		"nickname": u.Nickname,
+		"user_id":  u.ID,
+	})
+}
+
+func (s *Server) handleIdentityStatus(w http.ResponseWriter, r *http.Request) {
+	fp := r.URL.Query().Get("device_fp")
+	if fp == "" {
+		writeJSON(w, http.StatusOK, map[string]bool{"bound": false})
+		return
+	}
+	u, err := s.svc.BoundIdentity(r.Context(), fp)
+	if errors.Is(err, store.ErrNotFound) || u == nil {
+		writeJSON(w, http.StatusOK, map[string]bool{"bound": false})
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"bound":    true,
 		"nickname": u.Nickname,
 		"user_id":  u.ID,
 	})

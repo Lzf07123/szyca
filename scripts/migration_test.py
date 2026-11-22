@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PROJECT = os.environ.get("COMPOSE_PROJECT", "stpt-foundation-test")
+PROJECT = os.environ.get("COMPOSE_PROJECT", "stpt-integrity-test")
 COMPOSE = ["docker", "compose", "-p", PROJECT, "-f", "deploy/docker-compose.yml"]
 PG_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "szyca")
 
@@ -45,7 +45,7 @@ def psql(query: str) -> str:
 
 
 def wait_ready(timeout: int = 60) -> None:
-    port = os.environ.get("WEB_PORT", "8092")
+    port = os.environ.get("WEB_PORT", "8091")
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:

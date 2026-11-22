@@ -220,6 +220,29 @@ func (s *Server) handleAdminMe(w http.ResponseWriter, r *http.Request, principal
 	})
 }
 
+func (s *Server) handleAdminAuthStatus(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie(s.cfg.AdminCookieName)
+	if err != nil || cookie.Value == "" {
+		writeJSON(w, http.StatusOK, map[string]any{"account": nil, "csrf_token": ""})
+		return
+	}
+	principal, err := s.access.Authenticate(r.Context(), cookie.Value)
+	if err != nil {
+		clearAdminCookie(w, s.cfg.AdminCookieName, s.cfg.AdminCookieSecure)
+		writeJSON(w, http.StatusOK, map[string]any{"account": nil, "csrf_token": ""})
+		return
+	}
+	csrfToken, err := s.access.RotateCSRF(r.Context(), cookie.Value)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"account": nil, "csrf_token": ""})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"account":    principal,
+		"csrf_token": csrfToken,
+	})
+}
+
 func (s *Server) handleAdminLogout(w http.ResponseWriter, r *http.Request, principal access.Principal) {
 	if cookie, err := r.Cookie(s.cfg.AdminCookieName); err == nil {
 		_ = s.access.Logout(r.Context(), cookie.Value)

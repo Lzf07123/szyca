@@ -1,0 +1,1 @@
+admin access ok: login, HttpOnly session, CSRF, Origin, RBAC, disable and audit

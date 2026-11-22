@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Navigate, useBlocker, useNavigate } from 'react-router-dom'
-import { api, clearToken, flushPending, getDeviceFP, getToken, loadPending, pushPending, setToken } from '../api/client'
+import { api, clearToken, flushPending, getDeviceFP, getToken, loadPending, pushPending, randomID, setToken } from '../api/client'
 import { usePageMeta } from '../components/PageMeta'
 import { QuizSocket, wsURL } from '../ws/socket'
 
@@ -85,10 +85,10 @@ export default function Quiz() {
   // 本机是否已有绑定身份（未登录时查询，用于直接展示恢复选项）
   const checkBound = async () => {
     try {
-      const d = await api<{ nickname: string }>(
-        `/api/identity/current?device_fp=${encodeURIComponent(getDeviceFP())}`,
+      const d = await api<{ bound: boolean; nickname?: string }>(
+        `/api/identity/status?device_fp=${encodeURIComponent(getDeviceFP())}`,
       )
-      setBoundNick(d.nickname)
+      setBoundNick(d.bound ? d.nickname || '' : '')
     } catch {
       setBoundNick('')
     }
@@ -453,7 +453,7 @@ export default function Quiz() {
       return
     }
     locked.current = true
-    void answer(i, crypto.randomUUID())
+    void answer(i, randomID())
   }
 
   function advance() {
@@ -488,7 +488,7 @@ export default function Quiz() {
     }
     if (seconds <= 0 && !locked.current) {
       locked.current = true
-      void answer(null, crypto.randomUUID())
+      void answer(null, randomID())
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, feedback, expired, seconds])

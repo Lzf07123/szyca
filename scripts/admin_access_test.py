@@ -12,9 +12,9 @@ import uuid
 from dataclasses import dataclass
 
 
-BASE = os.environ.get("BASE_URL", "http://localhost:8092").rstrip("/")
+BASE = os.environ.get("BASE_URL", "http://localhost:8091").rstrip("/")
 OWNER = os.environ.get("ADMIN_USERNAME", "owner")
-OWNER_PASSWORD = os.environ.get("ADMIN_PASSWORD", "foundation-test")
+OWNER_PASSWORD = os.environ.get("ADMIN_PASSWORD", "integrity-test")
 
 
 @dataclass
