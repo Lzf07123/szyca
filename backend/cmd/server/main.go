@@ -14,6 +14,7 @@ import (
 	"szyca/internal/audit"
 	"szyca/internal/config"
 	"szyca/internal/httpapi"
+	"szyca/internal/lottery"
 	"szyca/internal/media"
 	"szyca/internal/publish"
 	"szyca/internal/quiz"
@@ -63,12 +64,13 @@ func main() {
 	svc.StartLeaderboardRefresh(ctx)
 	siteSvc := site.New(st.Pool(), cfg.Title)
 	mediaSvc := media.New(st.Pool())
+	lotterySvc := lottery.New(st.Pool(), svc, cfg.QuizCount)
 	hub := ws.NewHub(svc, pub.Subscribe(ctx)) // 排行榜改走 DB 全量排名
 	go hub.Run(ctx)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpapi.New(cfg, svc, siteSvc, mediaSvc, accessSvc, auditSvc, hub).Handler(),
+		Handler:           httpapi.New(cfg, svc, siteSvc, mediaSvc, lotterySvc, accessSvc, auditSvc, hub).Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

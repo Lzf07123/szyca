@@ -25,6 +25,7 @@ import (
 	"szyca/internal/access"
 	"szyca/internal/audit"
 	"szyca/internal/config"
+	"szyca/internal/lottery"
 	"szyca/internal/media"
 	"szyca/internal/quiz"
 	"szyca/internal/site"
@@ -37,6 +38,7 @@ type Server struct {
 	svc       *quiz.Service
 	site      *site.Service
 	media     *media.Service
+	lottery   *lottery.Service
 	access    *access.Service
 	audit     *audit.Service
 	hub       *ws.Hub
@@ -50,12 +52,14 @@ func New(
 	svc *quiz.Service,
 	siteSvc *site.Service,
 	mediaSvc *media.Service,
+	lotterySvc *lottery.Service,
 	accessSvc *access.Service,
 	auditSvc *audit.Service,
 	hub *ws.Hub,
 ) *Server {
 	return &Server{
-		cfg: cfg, svc: svc, site: siteSvc, media: mediaSvc, access: accessSvc, audit: auditSvc,
+		cfg: cfg, svc: svc, site: siteSvc, media: mediaSvc, lottery: lotterySvc,
+		access: accessSvc, audit: auditSvc,
 		hub: hub, startedAt: time.Now(),
 		adminFail: make(map[string]adminFailure),
 	}
@@ -95,6 +99,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/quiz/current", s.withFeature(site.FeatureQuiz, s.withUser(s.handleCurrentRound)))
 	mux.HandleFunc("POST /api/answer", s.withFeature(site.FeatureQuiz, s.withUser(s.handleAnswer)))
 	mux.HandleFunc("GET /api/me", s.withFeature(site.FeatureQuiz, s.withUser(s.handleMe)))
+	mux.HandleFunc("GET /api/lottery/campaign", s.withFeature(site.FeatureLottery, s.handleLotteryCampaign))
+	mux.HandleFunc("POST /api/lottery/draw", s.withFeature(site.FeatureLottery, s.withUser(s.handleLotteryDraw)))
+	mux.HandleFunc("GET /api/lottery/me", s.withFeature(site.FeatureLottery, s.withUser(s.handleLotteryMe)))
 
 	// WebSocket（可匿名=大屏）
 	mux.HandleFunc("GET /ws", s.withAnyFeature(
@@ -144,6 +151,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/admin/footer", s.withPermission("site.write", s.handleAdminSaveFooter))
 	mux.HandleFunc("GET /api/admin/logo", s.withPermission("site.read", s.handleAdminGetLogo))
 	mux.HandleFunc("POST /api/admin/logo", s.withPermission("site.write", s.handleAdminSaveLogo))
+	mux.HandleFunc("GET /api/admin/lottery/campaigns", s.withPermission("lottery.configure", s.handleAdminLotteryCampaigns))
+	mux.HandleFunc("POST /api/admin/lottery/campaigns", s.withPermission("lottery.configure", s.handleAdminSaveLotteryCampaign))
+	mux.HandleFunc("POST /api/admin/lottery/campaigns/{id}/status", s.withPermission("lottery.configure", s.handleAdminLotteryStatus))
+	mux.HandleFunc("POST /api/admin/lottery/campaigns/{id}/prizes", s.withPermission("lottery.configure", s.handleAdminSaveLotteryPrize))
+	mux.HandleFunc("DELETE /api/admin/lottery/campaigns/{id}/prizes/{prizeId}", s.withPermission("lottery.configure", s.handleAdminDeleteLotteryPrize))
+	mux.HandleFunc("GET /api/admin/lottery/draws", s.withPermission("lottery.configure", s.handleAdminLotteryDraws))
+	mux.HandleFunc("POST /api/admin/lottery/draws/{id}/claim", s.withPermission("lottery.claim", s.handleAdminLotteryClaim))
+	mux.HandleFunc("GET /api/admin/lottery/export", s.withPermission("lottery.configure", s.handleAdminLotteryExport))
 
 	// 上传文件静态服务（生产由 nginx 直出共享卷，此处兜底开发模式）
 	mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(s.cfg.UploadDir))))

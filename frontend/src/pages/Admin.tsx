@@ -3,6 +3,7 @@ import { api, clearCSRFToken, csrfHeader, setCSRFToken } from '../api/client'
 import { setFavicon, useSite } from '../api/site'
 import { usePageMeta } from '../components/PageMeta'
 import AccessPanel from './admin/AccessPanel'
+import AdminLottery from './admin/AdminLottery'
 import AuditPanel from './admin/AuditPanel'
 import MediaPanel from './admin/MediaPanel'
 import SiteEditor from './admin/SiteEditor'
@@ -54,13 +55,14 @@ interface AdminAccount {
   legacy: boolean
 }
 
-type AdminTab = 'overview' | 'control' | 'questions' | 'site' | 'appearance' | 'access' | 'audit'
+type AdminTab = 'overview' | 'control' | 'questions' | 'site' | 'lottery' | 'appearance' | 'access' | 'audit'
 
 const ADMIN_TABS: Array<{ key: AdminTab; label: string; permission: string }> = [
   { key: 'overview', label: '概览', permission: 'site.read' },
   { key: 'control', label: '答题控制', permission: 'quiz.operate' },
   { key: 'questions', label: '题库', permission: 'quiz.read' },
   { key: 'site', label: '站点内容', permission: 'site.read' },
+  { key: 'lottery', label: '抽奖', permission: 'lottery.configure' },
   { key: 'appearance', label: '媒体与外观', permission: 'media.read' },
   { key: 'access', label: '管理员', permission: 'access.manage' },
   { key: 'audit', label: '审计', permission: 'audit.read' },
@@ -599,6 +601,13 @@ export default function Admin() {
       {visibleTab === 'access' && (
         <AccessPanel
           onMessage={(message, error) => setMsg(`${error ? '✘' : '✔'} ${message}`)}
+        />
+      )}
+
+      {visibleTab === 'lottery' && (
+        <AdminLottery
+          onMessage={(message, error) => setMsg(`${error ? '✘' : '✔'} ${message}`)}
+          onSiteChanged={reloadSite}
         />
       )}
 

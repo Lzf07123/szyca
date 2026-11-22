@@ -129,9 +129,17 @@ def main() -> None:
     expect(status, payload, 403, "content editor cannot control lottery")
     status, payload = call(content, "GET", "/api/admin/export/scores")
     expect(status, payload, 403, "content editor cannot export scores")
+    status, payload = call(content, "GET", "/api/admin/lottery/campaigns")
+    expect(status, payload, 403, "content editor cannot access lottery")
 
     status, payload = call(event, "POST", "/api/admin/quiz-state", {"state": "stop"})
     expect(status, payload, 200, "event operator controls quiz")
+    status, payload = call(event, "GET", "/api/admin/lottery/campaigns")
+    expect(status, payload, 200, "event operator reads lottery")
+    status, payload = call(event, "PUT", "/api/admin/platform/features", {
+        "features": [{"key": "lottery", "enabled": False, "config": {}}]
+    })
+    expect(status, payload, 200, "event operator controls lottery switch")
     status, payload = call(event, "PUT", "/api/admin/platform/features", feature)
     expect(status, payload, 403, "event operator cannot edit site")
     status, payload = call(event, "GET", "/api/admin/export/scores")
@@ -145,6 +153,8 @@ def main() -> None:
     expect(status, payload, 403, "data viewer cannot operate quiz")
     status, payload = call(viewer, "GET", "/api/admin/audit")
     expect(status, payload, 200, "data viewer reads audit")
+    status, payload = call(viewer, "GET", "/api/admin/lottery/campaigns")
+    expect(status, payload, 403, "data viewer cannot access lottery")
 
     status, payload = call(
         content,
