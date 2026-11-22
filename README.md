@@ -8,8 +8,8 @@
 ## 功能一览
 
 - **吸睛首页**：协会会徽 + 照片墙横向轮播（后台批量上传）+ 科技感叠加特效（粒子网络/网格/光晕/扫描光束）
-- **在线答题**：一人一设备一身份；难度自选（全部/容易/简单/困难）；每题即时判分；断网不丢分（幂等 + 本地缓冲重试）；刷新断线可恢复
-- **排行榜**：全量排名（未答题也排、名次无限）、大屏最多显示 99 名、头部显示「我的排名」、参与/答题/在线人次统计
+- **在线答题**：一人一设备一身份；难度自选（全部/容易/简单/困难）；每轮题目顺序持久化；只能按当前题序每题提交一次；正确选项不下发前端；服务端按截止时间校验，网络抖动可配置宽限
+- **排行榜**：按最佳一轮总分优先、同分按用时排序；全量排名（未答题也排）、大屏最多显示 99 名、头部显示「我的排名」、参与/答题/在线连接统计
 - **身份规则**：设备指纹去重（同设备换昵称需先放弃）；放弃身份需二次确认并告知副作用；放弃后昵称永久封存、榜单留痕；可多轮答题取历史最佳成绩
 - **后台管理**（口令验证后可见）：系统概览（资源/访问）、答题控制/特效/公告、群二维码图片切换、题库增删停/批量导入 CSV、成绩导出 CSV、二维码增删改（标题/换图/启停）、站点 Logo 上传/恢复、首页背景/页脚信息（ICP+公安备案）配置
 
@@ -37,8 +37,10 @@ docker compose -f deploy/docker-compose.yml up -d --build
 |---|---|---|
 | `ADMIN_PASSWORD` | admin123 | 后台口令（务必修改） |
 | `QUESTION_SECONDS` | 20 | 每题倒计时（秒） |
+| `ANSWER_GRACE_SECONDS` | 20 | 网络抖动/断线补交宽限（秒）；截止时间本身仍以服务端记录为准 |
 | `QUESTION_COUNT` | 10 | 每轮抽题数 |
 | `WEB_PORT` | 8080 | 对外端口 |
+| `WS_ALLOWED_ORIGINS` | （空） | 额外允许的 WebSocket Origin，逗号分隔；同源与本机开发默认允许 |
 
 ### 基础镜像与软件源（构建/部署阶段均可变）
 
@@ -70,11 +72,11 @@ SOURCE_MIRROR=cn
 |---|---|---|
 | POST | /api/session | 昵称+设备指纹 → 身份（同设备同昵称自动恢复） |
 | POST | /api/quiz/round | 开始一轮（body: difficulty 可选） |
-| GET | /api/quiz/current | 恢复进行中的一轮 |
-| POST | /api/answer | 提交（request_id 幂等） |
+| GET | /api/quiz/current | 恢复进行中的一轮，返回持久化题序与本题截止时间 |
+| POST | /api/answer | 提交当前题（request_id 幂等；该轮该题只能计分一次） |
 | GET | /api/me | 我的最佳成绩与全量排名 |
 | GET | /api/rank?top=99 | 排行榜 |
-| GET | /api/stats | 参与/答题/在线人次 |
+| GET | /api/stats | 参与人数/累计答题/在线连接数 |
 | GET | /api/backgrounds · /api/qrcode · /api/config | 前台资源 |
 | GET | /ws?token=… | WebSocket 实时推送（匿名=大屏） |
 | POST | /api/identity/abandon | 放弃身份（需本机 device_fp 归属校验） |
@@ -119,6 +121,22 @@ docker compose -p stpt-loadtest -f deploy/docker-compose.yml down -v
 - 前端热更：`cd frontend && npm run dev`（已配代理到 :8080；仅开发环境使用，不污染部署）
 - 后端改代码后：`docker compose -f deploy/docker-compose.yml up -d --build app web`
 - 查看日志：`docker compose -f deploy/docker-compose.yml logs -f app`
+
+## 自动化回归（Docker 隔离栈）
+
+```bash
+WEB_PORT=8091 ADMIN_PASSWORD=integrity-test \
+QUESTION_SECONDS=5 ANSWER_GRACE_SECONDS=2 \
+docker compose -p stpt-integrity-test -f deploy/docker-compose.yml up -d --build
+python3 scripts/integration_test.py
+docker compose -p stpt-integrity-test -f deploy/docker-compose.yml down -v
+```
+
+覆盖题目脱敏、题序、幂等重试、单轮唯一计分、服务端超时、分值榜单、CSV 名次一致性、并发昵称唯一、WebSocket Origin 与后台口令限流。后端单测：
+
+```bash
+docker run --rm -v "$PWD/backend:/src" -w /src golang:1.22-alpine go test ./...
+```
 
 ## License
 

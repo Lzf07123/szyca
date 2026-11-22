@@ -16,12 +16,14 @@ interface AnswerRes {
   correct_answer: number
   score: number
   duplicate: boolean
+  next_deadline?: string
 }
 
 interface RoundResp {
   round_no: number
   questions: Question[]
   question_seconds: number
+  question_deadline: string
 }
 
 type Phase = 'name' | 'loading' | 'quiz' | 'done'
@@ -36,8 +38,10 @@ export default function Quiz() {
   const [feedback, setFeedback] = useState<AnswerRes | null>(null)
   const [seconds, setSeconds] = useState(20)
   const [qSeconds, setQSeconds] = useState(20)
+  const [deadline, setDeadline] = useState(0)
   const [error, setError] = useState('')
   const [flash, setFlash] = useState('')
+  const [expired, setExpired] = useState(false)
   const [myNick, setMyNick] = useState(() => sessionStorage.getItem('quiz_nick') || '')
   const [identityConflict, setIdentityConflict] = useState('')
   const [boundNick, setBoundNick] = useState<string | null>(null)
@@ -51,7 +55,7 @@ export default function Quiz() {
   const nav = useNavigate()
   const allowLeaveRef = useRef(false)
 
-  // 建立带 token 的实时连接（在线人次统计/特效/公告）
+  // 建立带 token 的实时连接（在线连接统计/特效/公告）
   const connectSocket = () => {
     const t = getToken()
     if (!t) return
@@ -133,10 +137,11 @@ export default function Quiz() {
     setRoundNo(d.round_no)
     setQuestions(d.questions)
     setQSeconds(d.question_seconds)
-    setSeconds(d.question_seconds)
+    applyServerDeadline(d.question_deadline)
     setIdx(0)
     setFeedback(null)
     setSelected(null)
+    setExpired(false)
     locked.current = false
     if (flashMsg) setFlash(flashMsg)
     if (d.questions.length === 0) {
@@ -145,6 +150,17 @@ export default function Quiz() {
       return
     }
     setPhase('quiz')
+  }
+
+  function applyServerDeadline(value?: string) {
+    const ms = value ? Date.parse(value) : Number.NaN
+    if (!Number.isFinite(ms)) {
+      setDeadline(0)
+      setSeconds(qSeconds)
+      return
+    }
+    setDeadline(ms)
+    setSeconds(Math.max(0, Math.ceil((ms - Date.now()) / 1000)))
   }
 
   // 已有 token → 恢复进行中的一轮；但「退出答题」后不自动恢复，停留在选择界面
@@ -194,7 +210,7 @@ export default function Quiz() {
         setRoundNo(cur.round_no)
         setQuestions(cur.questions)
         setQSeconds(cur.question_seconds)
-        setSeconds(cur.question_seconds)
+        applyServerDeadline(cur.question_deadline)
         if (answered < cur.questions.length) {
           sessionStorage.removeItem('quiz_exited')
           setIdx(answered)
@@ -253,7 +269,7 @@ export default function Quiz() {
       setRoundNo(cur.round_no)
       setQuestions(cur.questions)
       setQSeconds(cur.question_seconds)
-      setSeconds(cur.question_seconds)
+      applyServerDeadline(cur.question_deadline)
       if (answered >= cur.questions.length) {
         setNeedsNewRound(true)
         setPhase('name')
@@ -405,10 +421,22 @@ export default function Quiz() {
         body: JSON.stringify({ request_id: requestId, question_id: q.id, selected: i }),
       })
       setFeedback(res)
+      if (res.next_deadline) applyServerDeadline(res.next_deadline)
       setSelected(i)
       setFlash('')
-    } catch {
-      // 提交失败：本地缓冲，不丢分
+    } catch (e) {
+      const err = e as Error & { status?: number }
+      if (err.status === 401) {
+        authLost()
+        return
+      }
+      if (err.status && err.status < 500 && err.status !== 429) {
+        setFeedback(null)
+        setExpired(true)
+        setFlash(`${err.message}，请放弃本轮后重新开始`)
+        return
+      }
+      // 网络或服务端瞬时错误：本地缓冲，恢复后自动补交。
       pushPending({ request_id: requestId, question_id: q.id, selected: i })
       setFeedback({ correct: false, correct_answer: -1, score: 0, duplicate: false })
       setSelected(i)
@@ -417,7 +445,7 @@ export default function Quiz() {
   }
 
   function choose(i: number) {
-    if (locked.current || phase !== 'quiz' || feedback) return
+    if (locked.current || phase !== 'quiz' || feedback || expired) return
     if (quizState !== 'start') {
       setFlash('答题未开始或已结束，无法提交')
       return
@@ -436,32 +464,32 @@ export default function Quiz() {
       setPhase('done')
     } else {
       setIdx(idx + 1)
-      setSeconds(qSeconds)
     }
   }
 
-  // 倒计时（出现作答反馈后停止，避免答完还要干等）
+  // 倒计时以服务端截止时间为准；出现作答反馈后暂停显示。
   useEffect(() => {
-    if (phase !== 'quiz' || feedback) return
-    const t = window.setInterval(() => {
-      setSeconds((s) => (s <= 1 ? 0 : s - 1))
-    }, 1000)
+    if (phase !== 'quiz' || feedback || expired || deadline <= 0) return
+    const sync = () => setSeconds(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)))
+    sync()
+    const t = window.setInterval(sync, 250)
     return () => clearInterval(t)
-  }, [phase, idx, feedback])
+  }, [phase, idx, feedback, expired, deadline])
 
-  // 作答后或超时后自动进入下一题
+  // 作答后自动进入下一题；超时则提交一条空答案，让服务端同步推进题序。
   useEffect(() => {
     if (phase !== 'quiz') return
+    if (expired) return
     if (feedback) {
       const t = window.setTimeout(advance, 1200)
       return () => clearTimeout(t)
     }
-    if (seconds <= 0) {
-      const t = window.setTimeout(advance, 600)
-      return () => clearTimeout(t)
+    if (seconds <= 0 && !locked.current) {
+      locked.current = true
+      void answer(null, crypto.randomUUID())
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, feedback, seconds])
+  }, [phase, feedback, expired, seconds])
 
   if (phase === 'done') return <Navigate to="/result" replace />
 
@@ -524,6 +552,13 @@ export default function Quiz() {
         </div>
         {quizState !== 'start' && (
           <div className="announce-banner"><span>答题已暂停，答案提交将被拒绝</span></div>
+        )}
+        {expired && (
+          <div className="bound-actions">
+            <button className="btn" onClick={requestAbandonRound}>
+              放弃本轮并重新开始
+            </button>
+          </div>
         )}
         {feedback && (
           <p className={`feedback${feedback.correct ? ' ok' : ' bad'}`}>

@@ -1,7 +1,10 @@
 package ws
 
 import (
+	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -14,13 +17,6 @@ const (
 	maxMessageSize = 1024
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	// 生产环境走同源 Nginx 反代；开发期允许跨源，方便 Vite 直连
-	CheckOrigin: func(r *http.Request) bool { return true },
-}
-
 type Client struct {
 	hub    *Hub
 	conn   *websocket.Conn
@@ -29,7 +25,14 @@ type Client struct {
 }
 
 // Serve 返回 WebSocket handler；token 为空表示匿名（大屏），否则校验。
-func Serve(hub *Hub, validate func(token string) bool) http.HandlerFunc {
+func Serve(hub *Hub, validate func(token string) bool, allowedOrigins []string) http.HandlerFunc {
+	upgrader := websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			return originAllowed(r, allowedOrigins)
+		},
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		tok := r.URL.Query().Get("token")
 		authed := false
@@ -49,6 +52,40 @@ func Serve(hub *Hub, validate func(token string) bool) http.HandlerFunc {
 		go c.writePump()
 		go c.readPump()
 	}
+}
+
+func originAllowed(r *http.Request, allowedOrigins []string) bool {
+	origin := strings.TrimRight(r.Header.Get("Origin"), "/")
+	if origin == "" {
+		return true // 原生客户端和压测工具可省略 Origin
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	for _, allowed := range allowedOrigins {
+		if strings.EqualFold(strings.TrimRight(allowed, "/"), origin) {
+			return true
+		}
+	}
+	if strings.EqualFold(u.Host, r.Host) {
+		return true
+	}
+	originHost, _, originErr := net.SplitHostPort(u.Host)
+	if originErr != nil {
+		originHost = u.Hostname()
+	}
+	requestHost, _, requestErr := net.SplitHostPort(r.Host)
+	if requestErr != nil {
+		requestHost = r.Host
+	}
+	return isLoopbackHost(originHost) && isLoopbackHost(requestHost)
+}
+
+func isLoopbackHost(host string) bool {
+	host = strings.Trim(host, "[]")
+	ip := net.ParseIP(host)
+	return strings.EqualFold(host, "localhost") || (ip != nil && ip.IsLoopback())
 }
 
 func (c *Client) readPump() {

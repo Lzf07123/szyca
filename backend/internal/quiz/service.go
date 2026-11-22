@@ -20,22 +20,31 @@ import (
 )
 
 var (
-	ErrQuizNotStarted = errors.New("答题未开始")
-	ErrNoRound        = errors.New("请先开始一轮答题")
-	ErrIdentityBound  = errors.New("该设备已绑定答题身份")
-	ErrQuestionClosed = errors.New("题目不可用")
-	ErrBadRequest     = errors.New("参数错误")
+	ErrQuizNotStarted  = errors.New("答题未开始")
+	ErrNoRound         = errors.New("请先开始一轮答题")
+	ErrIdentityBound   = errors.New("该设备已绑定答题身份")
+	ErrQuestionClosed  = errors.New("题目不可用")
+	ErrNoQuestions     = errors.New("当前难度下没有可用题目")
+	ErrQuestionOrder   = errors.New("请按顺序回答当前题目")
+	ErrQuestionExpired = errors.New("本题已超时")
+	ErrQuestionTaken   = errors.New("本题已经作答，不能重复提交")
+	ErrBadRequest      = errors.New("参数错误")
 )
 
 type Service struct {
-	store *store.Store
-	rank  *rank.Rank
-	pub   *publish.Pub
-	title string
+	store              *store.Store
+	rank               *rank.Rank
+	pub                *publish.Pub
+	title              string
+	questionSeconds    int
+	answerGraceSeconds int
 }
 
-func New(st *store.Store, rk *rank.Rank, pub *publish.Pub, title string) *Service {
-	return &Service{store: st, rank: rk, pub: pub, title: title}
+func New(st *store.Store, rk *rank.Rank, pub *publish.Pub, title string, questionSeconds, answerGraceSeconds int) *Service {
+	return &Service{
+		store: st, rank: rk, pub: pub, title: title,
+		questionSeconds: questionSeconds, answerGraceSeconds: answerGraceSeconds,
+	}
 }
 
 func (s *Service) Title() string { return s.title }
@@ -75,6 +84,12 @@ func (s *Service) StartSession(ctx context.Context, nickname, deviceFP string) (
 	}
 	token := randomHex(32)
 	u, err := s.store.CreateUser(ctx, nick, token, deviceFP)
+	if errors.Is(err, store.ErrNicknameTaken) {
+		return nil, false, errors.New("该昵称已被使用，请更换")
+	}
+	if errors.Is(err, store.ErrDeviceTaken) {
+		return nil, false, ErrIdentityBound
+	}
 	return u, false, err
 }
 
@@ -195,52 +210,53 @@ func (s *Service) AbandonRound(ctx context.Context, userID int64) (int64, error)
 	if err != nil {
 		return 0, err
 	}
-	// 本轮可能是历史最佳，作废后按剩余轮次重算榜单
-	go s.refreshRank(context.WithoutCancel(ctx), userID)
 	return deleted, nil
 }
 
-// StartRound 开始新一轮：难度由用户答题前选择并随轮持久化。
-func (s *Service) StartRound(ctx context.Context, userID int64, difficulty string, limit int) (int, []store.Question, error) {
+// StartRound 开始新一轮：题目顺序写入数据库，后续刷新和重启都使用同一份快照。
+func (s *Service) StartRound(ctx context.Context, userID int64, difficulty string, limit int) (int, []store.Question, time.Time, error) {
 	if !validDifficulty(difficulty) {
-		return 0, nil, ErrBadRequest
+		return 0, nil, time.Time{}, ErrBadRequest
 	}
-	roundNo, err := s.store.NextRound(ctx, userID, difficulty)
+	roundNo, startedAt, err := s.store.NextRound(ctx, userID, difficulty)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, time.Time{}, err
 	}
 	qs, err := s.drawQuestions(ctx, userID, roundNo, difficulty, limit)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, time.Time{}, err
 	}
-	return roundNo, qs, nil
+	if len(qs) == 0 {
+		return 0, nil, time.Time{}, ErrNoQuestions
+	}
+	questionIDs := make([]int64, len(qs))
+	for i := range qs {
+		questionIDs[i] = qs[i].ID
+	}
+	if err := s.store.SaveRoundQuestions(ctx, userID, roundNo, questionIDs); err != nil {
+		return 0, nil, time.Time{}, err
+	}
+	return roundNo, qs, startedAt.Add(time.Duration(s.questionSeconds) * time.Second), nil
 }
 
 // CurrentRound 返回当前进行中的一轮；无轮次或本轮已答完返回 ErrNoRound。
-func (s *Service) CurrentRound(ctx context.Context, userID int64, limit int) (int, []store.Question, int, error) {
-	roundNo, err := s.store.CurrentRoundNo(ctx, userID)
+func (s *Service) CurrentRound(ctx context.Context, userID int64) (int, []store.Question, int, time.Time, error) {
+	st, err := s.store.CurrentRoundState(ctx, userID)
 	if err != nil {
-		return 0, nil, 0, err
+		return 0, nil, 0, time.Time{}, err
 	}
-	if roundNo == 0 {
-		return 0, nil, 0, ErrNoRound
+	if st.RoundNo == 0 {
+		return 0, nil, 0, time.Time{}, ErrNoRound
 	}
-	difficulty, err := s.store.CurrentDifficulty(ctx, userID)
+	qs, err := s.store.RoundQuestions(ctx, userID, st.RoundNo)
 	if err != nil {
-		return 0, nil, 0, err
+		return 0, nil, 0, time.Time{}, err
 	}
-	qs, err := s.drawQuestions(ctx, userID, roundNo, difficulty, limit)
-	if err != nil {
-		return 0, nil, 0, err
+	if len(qs) == 0 || st.CurrentQuestionIdx >= len(qs) {
+		return 0, nil, 0, time.Time{}, ErrNoRound
 	}
-	st, err := s.store.RoundStats(ctx, userID, roundNo)
-	if err != nil {
-		return 0, nil, 0, err
-	}
-	if st.Count >= len(qs) {
-		return 0, nil, 0, ErrNoRound
-	}
-	return roundNo, qs, st.Count, nil
+	deadline := st.QuestionStartedAt.Add(time.Duration(s.questionSeconds) * time.Second)
+	return st.RoundNo, qs, st.CurrentQuestionIdx, deadline, nil
 }
 
 // correctIndex 返回该用户视角下正确答案的下标。
@@ -257,30 +273,43 @@ func correctIndex(q store.Question, userID int64, roundNo int) int {
 
 // ---------- answer ----------
 
-func (s *Service) Submit(ctx context.Context, userID int64, requestID string, questionID int64, selected *int) (att *store.Attempt, correctIdx int, duplicate bool, err error) {
+func (s *Service) Submit(ctx context.Context, userID int64, requestID string, questionID int64, selected *int) (att *store.Attempt, correctIdx int, duplicate bool, nextDeadline time.Time, err error) {
 	if requestID == "" {
-		return nil, -1, false, ErrBadRequest
+		return nil, -1, false, time.Time{}, ErrBadRequest
 	}
-	state, err := s.store.QuizState(ctx)
+	sub, err := s.store.CurrentSubmissionQuestion(ctx, userID)
 	if err != nil {
-		return nil, -1, false, err
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, -1, false, time.Time{}, ErrNoRound
+		}
+		return nil, -1, false, time.Time{}, err
 	}
-	if state != "start" {
-		return nil, -1, false, ErrQuizNotStarted
+	roundNo := sub.RoundNo
+	q := &sub.Question
+	if q.ID != questionID {
+		// 已完成题目的同 request_id 重试必须返回原响应；换新 request_id 才视为跳题/重复计分。
+		if existing, lookupErr := s.store.GetAttemptByRequest(ctx, requestID); lookupErr == nil {
+			if existing.UserID != userID {
+				return nil, -1, false, time.Time{}, ErrBadRequest
+			}
+			oldQuestion, qErr := s.store.GetQuestion(ctx, questionID)
+			if qErr != nil {
+				return existing, -1, true, time.Time{}, nil
+			}
+			return existing, correctIndex(*oldQuestion, userID, existing.RoundNo), true, time.Time{}, nil
+		} else if !errors.Is(lookupErr, store.ErrNotFound) {
+			return nil, -1, false, time.Time{}, lookupErr
+		}
+		if q.ID == 0 {
+			return nil, -1, false, time.Time{}, ErrNoRound
+		}
+		return nil, -1, false, time.Time{}, ErrQuestionOrder
 	}
-	roundNo, err := s.store.CurrentRoundNo(ctx, userID)
-	if err != nil {
-		return nil, -1, false, err
-	}
-	if roundNo == 0 {
-		return nil, -1, false, ErrNoRound
-	}
-	q, err := s.store.GetQuestion(ctx, questionID)
-	if err != nil {
-		return nil, -1, false, err
+	if sub.State != "start" {
+		return nil, -1, false, time.Time{}, ErrQuizNotStarted
 	}
 	if !q.Active {
-		return nil, -1, false, ErrQuestionClosed
+		return nil, -1, false, time.Time{}, ErrQuestionClosed
 	}
 
 	correct := false
@@ -294,7 +323,7 @@ func (s *Service) Submit(ctx context.Context, userID int64, requestID string, qu
 	if correct {
 		score = q.Score
 	}
-	att, duplicate, err = s.store.InsertAttempt(ctx, &store.Attempt{
+	rec, err := s.store.RecordAttempt(ctx, &store.Attempt{
 		UserID:     userID,
 		QuestionID: questionID,
 		Selected:   selected,
@@ -302,31 +331,30 @@ func (s *Service) Submit(ctx context.Context, userID int64, requestID string, qu
 		Score:      score,
 		RequestID:  requestID,
 		RoundNo:    roundNo,
-	})
+	}, s.questionSeconds, s.answerGraceSeconds)
 	if err != nil {
-		return nil, -1, false, err
+		switch {
+		case errors.Is(err, store.ErrQuestionOrder):
+			return nil, -1, false, time.Time{}, ErrQuestionOrder
+		case errors.Is(err, store.ErrQuestionExpired):
+			return nil, -1, false, time.Time{}, ErrQuestionExpired
+		case errors.Is(err, store.ErrQuestionAlreadyTaken):
+			return nil, -1, false, time.Time{}, ErrQuestionTaken
+		case errors.Is(err, store.ErrRequestConflict):
+			return nil, -1, false, time.Time{}, ErrBadRequest
+		case errors.Is(err, store.ErrQuizStopped):
+			return nil, -1, false, time.Time{}, ErrQuizNotStarted
+		case errors.Is(err, store.ErrNotFound):
+			return nil, -1, false, time.Time{}, ErrNoRound
+		default:
+			return nil, -1, false, time.Time{}, err
+		}
 	}
-	if !duplicate {
-		// 异步刷新排行榜，不阻塞答题提交关键路径
-		go s.refreshRank(context.WithoutCancel(ctx), userID)
+	att, duplicate = rec.Attempt, rec.Duplicate
+	if !rec.NextQuestionStarted.IsZero() {
+		nextDeadline = rec.NextQuestionStarted.Add(time.Duration(s.questionSeconds) * time.Second)
 	}
-	return att, correctIndex(*q, userID, roundNo), duplicate, nil
-}
-
-func (s *Service) refreshRank(ctx context.Context, userID int64) {
-	stats, err := s.store.BestRoundStats(ctx, userID)
-	if err != nil {
-		return
-	}
-	elapsed := int64(0)
-	if stats.Count > 0 {
-		elapsed = stats.Last.Sub(stats.First).Milliseconds()
-	}
-	u, err := s.store.GetUser(ctx, userID)
-	if err != nil {
-		return
-	}
-	_ = s.rank.Update(ctx, userID, u.Nickname, stats.Correct, elapsed)
+	return att, correctIndex(*q, userID, roundNo), duplicate, nextDeadline, nil
 }
 
 // ---------- stats & rank ----------
@@ -365,8 +393,8 @@ func (s *Service) MyStats(ctx context.Context, userID int64) (*MyStats, error) {
 		Correct:   st.Correct,
 		Answered:  st.Count,
 		ElapsedMS: elapsed,
-		Score:     st.Correct * 10, // 最佳一轮成绩
-		Rank:      rnk,             // 全量排名（含未答题者）
+		Score:     st.Score,
+		Rank:      rnk, // 全量排名（含未答题者）
 		Total:     total,
 	}, nil
 }
@@ -404,6 +432,7 @@ func (s *Service) refreshLeaderboard(ctx context.Context) {
 			UserID:    strconv.FormatInt(r.UserID, 10),
 			Nickname:  r.Nickname,
 			Correct:   r.Correct,
+			Score:     r.Score,
 			ElapsedMS: r.ElapsedMS,
 		})
 	}
@@ -726,7 +755,7 @@ type ScoreRow struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// ExportScores 导出全部用户的最高成绩（按榜单名次，未上榜按注册顺序排后）。
+// ExportScores 导出全部用户的最高成绩，名次与页面使用同一份数据库全量榜单。
 func (s *Service) ExportScores(ctx context.Context) ([]ScoreRow, error) {
 	users, err := s.store.ListAllUsers(ctx)
 	if err != nil {
@@ -736,16 +765,15 @@ func (s *Service) ExportScores(ctx context.Context) ([]ScoreRow, error) {
 	if err != nil {
 		return nil, err
 	}
-	entries, err := s.rank.Top(ctx, 100000)
+	entries, _, err := s.store.Leaderboard(ctx)
 	if err != nil {
 		return nil, err
 	}
-	pos := map[string]int64{}
+	pos := map[int64]int64{}
 	for i, e := range entries {
 		pos[e.UserID] = int64(i + 1)
 	}
-	ranked := []ScoreRow{}
-	unranked := []ScoreRow{}
+	rows := make([]ScoreRow, 0, len(users))
 	for _, u := range users {
 		st, err := s.store.BestRoundStats(ctx, u.ID)
 		if err != nil {
@@ -760,20 +788,16 @@ func (s *Service) ExportScores(ctx context.Context) ([]ScoreRow, error) {
 			Correct:   st.Correct,
 			Answered:  st.Count,
 			ElapsedMS: elapsed,
-			Score:     st.Correct * 10,
+			Score:     st.Score,
 			Rounds:    rounds[u.ID],
 			Abandoned: u.Abandoned,
 			CreatedAt: u.CreatedAt,
+			Rank:      pos[u.ID],
 		}
-		if p, ok := pos[fmt.Sprint(u.ID)]; ok {
-			row.Rank = p
-			ranked = append(ranked, row)
-		} else {
-			unranked = append(unranked, row)
-		}
+		rows = append(rows, row)
 	}
-	sort.Slice(ranked, func(i, j int) bool { return ranked[i].Rank < ranked[j].Rank })
-	return append(ranked, unranked...), nil
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i].Rank < rows[j].Rank })
+	return rows, nil
 }
 
 // ---------- difficulty ----------
