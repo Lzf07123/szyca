@@ -5,6 +5,10 @@
 > 组件视觉实现：`frontend/src/cosmos.css`
 >
 > 静态品牌文案：`frontend/src/brand.ts`
+>
+> 设计治理：`szyca` 项目自有，不引用 `Li&Design` 共享子模块
+>
+> 模板快照：`design-system/szyca/template/`，由 `scripts/export_design_template.py` 生成与校验
 
 ## 1. 设计原则
 
