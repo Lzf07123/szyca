@@ -1119,7 +1119,7 @@ export default function Admin() {
 
       {visibleTab === 'appearance' && (
         <div className="card">
-          <div className="admin-grid">
+          <div className="admin-grid appearance-grid">
           <div className="admin-panel">
             <h3>站点 Logo</h3>
             <p className="muted">显示在顶栏、首页会徽与大屏标题；未上传时使用内置样式。</p>
@@ -1151,89 +1151,6 @@ export default function Admin() {
             ) : (
               <p className="muted">当前使用内置 Logo</p>
             )}
-          </div>
-
-          <div className="admin-panel">
-            <h3>页脚信息</h3>
-            <label className="field">
-              拥有人 / 版权
-              <input
-                value={footer.owner}
-                readOnly={!can('site.write')}
-                onChange={(e) => setFooter({ ...footer, owner: e.target.value })}
-                placeholder="计算机协会 · 汕头职业技术学院"
-              />
-            </label>
-            <label className="field">
-              开源协议
-              <input
-                value={footer.license}
-                readOnly={!can('site.write')}
-                onChange={(e) => setFooter({ ...footer, license: e.target.value })}
-                placeholder="开源协议：MIT"
-              />
-            </label>
-            <label className="field">
-              ICP 备案号（留空隐藏）
-              <input
-                value={footer.icp}
-                readOnly={!can('site.write')}
-                onChange={(e) => setFooter({ ...footer, icp: e.target.value })}
-                placeholder="粤ICP备XXXXXXXX号"
-              />
-            </label>
-            <label className="field">
-              ICP 备案图标（后台上传）
-              <input
-                type="file"
-                accept="image/*"
-                disabled={!can('site.write')}
-                onChange={async (e) => {
-                  const f = e.target.files && e.target.files[0]
-                  if (!f) return
-                  try {
-                    const url = await uploadImage(f)
-                    setFooter({ ...footer, icp_icon: url })
-                    setMsg('✔ ICP 图标已上传，记得点保存')
-                  } catch (err) {
-                    setMsg(`✘ ${(err as Error).message}`)
-                  }
-                }}
-              />
-              {footer.icp_icon && <img className="thumb" src={footer.icp_icon} alt="ICP 图标预览" />}
-            </label>
-            <label className="field">
-              公安备案号（如：粤公网安备 4405XXXXXXXXXX号）
-              <input
-                value={footer.police}
-                readOnly={!can('site.write')}
-                onChange={(e) => setFooter({ ...footer, police: e.target.value })}
-                placeholder="粤公网安备 XXXXXXXXXXXX号"
-              />
-            </label>
-            <label className="field">
-              公安备案图标（后台上传）
-              <input
-                type="file"
-                accept="image/*"
-                disabled={!can('site.write')}
-                onChange={async (e) => {
-                  const f = e.target.files && e.target.files[0]
-                  if (!f) return
-                  try {
-                    const url = await uploadImage(f)
-                    setFooter({ ...footer, police_icon: url })
-                    setMsg('✔ 公安图标已上传，记得点保存')
-                  } catch (err) {
-                    setMsg(`✘ ${(err as Error).message}`)
-                  }
-                }}
-              />
-              {footer.police_icon && <img className="thumb" src={footer.police_icon} alt="公安图标预览" />}
-            </label>
-            {can('site.write') && <button className="btn btn-accent" onClick={() => void act('/api/admin/footer', footer, '页脚信息已更新')}>
-              保存页脚
-            </button>}
           </div>
 
           <div className="admin-panel">
@@ -1275,6 +1192,91 @@ export default function Admin() {
               {bgs.length === 0 && <li className="muted">暂无背景图，未上传时显示粒子动画</li>}
             </ul>
           </div>
+
+          <div className="admin-panel appearance-footer">
+            <h3>页脚信息</h3>
+            <div className="appearance-footer-fields">
+              <label className="field">
+                拥有人 / 版权
+                <input
+                  value={footer.owner}
+                  readOnly={!can('site.write')}
+                  onChange={(e) => setFooter({ ...footer, owner: e.target.value })}
+                  placeholder="计算机协会 · 汕头职业技术学院"
+                />
+              </label>
+              <label className="field">
+                开源协议
+                <input
+                  value={footer.license}
+                  readOnly={!can('site.write')}
+                  onChange={(e) => setFooter({ ...footer, license: e.target.value })}
+                  placeholder="开源协议：MIT"
+                />
+              </label>
+              <label className="field">
+                ICP 备案号（留空隐藏）
+                <input
+                  value={footer.icp}
+                  readOnly={!can('site.write')}
+                  onChange={(e) => setFooter({ ...footer, icp: e.target.value })}
+                  placeholder="粤ICP备XXXXXXXX号"
+                />
+              </label>
+              <label className="field">
+                ICP 备案图标（后台上传）
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={!can('site.write')}
+                  onChange={async (e) => {
+                    const f = e.target.files && e.target.files[0]
+                    if (!f) return
+                    try {
+                      const url = await uploadImage(f)
+                      setFooter({ ...footer, icp_icon: url })
+                      setMsg('✔ ICP 图标已上传，记得点保存')
+                    } catch (err) {
+                      setMsg(`✘ ${(err as Error).message}`)
+                    }
+                  }}
+                />
+                {footer.icp_icon && <img className="thumb" src={footer.icp_icon} alt="ICP 图标预览" />}
+              </label>
+              <label className="field">
+                公安备案号（留空隐藏）
+                <input
+                  value={footer.police}
+                  readOnly={!can('site.write')}
+                  onChange={(e) => setFooter({ ...footer, police: e.target.value })}
+                  placeholder="粤公网安备 XXXXXXXXXXXX号"
+                />
+              </label>
+              <label className="field">
+                公安备案图标（后台上传）
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={!can('site.write')}
+                  onChange={async (e) => {
+                    const f = e.target.files && e.target.files[0]
+                    if (!f) return
+                    try {
+                      const url = await uploadImage(f)
+                      setFooter({ ...footer, police_icon: url })
+                      setMsg('✔ 公安图标已上传，记得点保存')
+                    } catch (err) {
+                      setMsg(`✘ ${(err as Error).message}`)
+                    }
+                  }}
+                />
+                {footer.police_icon && <img className="thumb" src={footer.police_icon} alt="公安图标预览" />}
+              </label>
+            </div>
+            {can('site.write') && <button className="btn btn-accent" onClick={() => void act('/api/admin/footer', footer, '页脚信息已更新')}>
+              保存页脚
+            </button>}
+          </div>
           <MediaPanel
             canWrite={can('media.write')}
             onMessage={(message, error) => setMsg(`${error ? '✘' : '✔'} ${message}`)}
@@ -1297,7 +1299,7 @@ export default function Admin() {
           )}
         </div>
         <div className="admin-grid">
-          {can('quiz.write') && <div className="admin-panel">
+          {can('quiz.write') && <div className="admin-panel question-import-panel">
             <h3>批量导入题目</h3>
             <p className="muted">
               CSV 列：题目, 选项A~F, 正确答案(A-F), 难度, 分值。题目以「示例」开头的行自动跳过。

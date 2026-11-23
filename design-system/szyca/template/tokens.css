@@ -2,7 +2,7 @@
  * szyca · Digital Deep Space template v1.0.6
  * Project-owned visual layer; no Li&Design submodule dependency.
  * Generated snapshot from frontend/src/index.css
- * source-sha256: dbb812a69037bf0c2a599773f3c86523f3eadd5dcb5b37ccee41d0b59d03ef60
+ * source-sha256: 3eef6494b7977da0743997ca087e64068ded508d99dba343d24d8a6414ce67c3
  * Do not edit directly. Run scripts/export_design_template.py --write.
  */
 :root {
@@ -27,8 +27,8 @@
   --warning: #d29922;
   --error: #f85149;
   --font-sans: 'Noto Sans SC Variable', 'Noto Sans SC', 'Source Han Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --font-display: 'Space Grotesk Variable', 'Space Grotesk', 'Noto Sans SC Variable', 'Noto Sans SC', 'PingFang SC', sans-serif;
-  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  --font-display: 'Space Grotesk Variable', 'Space Grotesk', 'Noto Sans SC Variable', 'Noto Sans SC', 'Source Han Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', 'Noto Sans SC Variable', 'Noto Sans SC', 'Source Han Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace;
   --grid-size: 56px;
   --radius-sm: 10px;
   --radius-md: 12px;
@@ -102,8 +102,6 @@
   --gold: var(--warning);
   --silver: #9ba7b4;
   --bronze: #c98b52;
-  --font-pixel: var(--font-display);
-  --font-retro: var(--font-mono);
   --seaglass-deep: var(--accent-primary);
   --seaglass-light: var(--brand-300);
   --paper: var(--bg-950);

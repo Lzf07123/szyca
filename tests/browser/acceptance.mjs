@@ -262,7 +262,7 @@ async function assertFramedChrome(page, label) {
   expect(chrome.footer.top >= chrome.main.bottom - 1, `${label}: footer overlaps main content`)
 }
 
-async function assertCosmosHome(page, label) {
+async function assertCosmosHome(page, label, expectedModuleCount) {
   const cosmos = await page.evaluate(() => {
     const canvas = document.querySelector('.cosmic-canvas')
     const grid = document.querySelector('.cosmic-grid')
@@ -280,7 +280,10 @@ async function assertCosmosHome(page, label) {
       logoGradient: getComputedStyle(logo, '::before').backgroundImage,
       hasUploadedLogo: Boolean(logo.querySelector('img')),
       moduleCount: document.querySelectorAll('.module-card').length,
-      moduleColumns: getComputedStyle(moduleGrid).gridTemplateColumns.split(' ').length,
+      moduleColumns: getComputedStyle(moduleGrid).gridTemplateColumns
+        .split(' ')
+        .filter((column) => Number.parseFloat(column) > 0)
+        .length,
       bootCommand: document.querySelector('.boot-command')?.textContent ?? '',
       terminalText: document.querySelector('.terminal-card')?.textContent ?? '',
       footerText: document.querySelector('.footer-terminal')?.textContent ?? '',
@@ -298,8 +301,16 @@ async function assertCosmosHome(page, label) {
   expect(cosmos.gridSize.includes('56px'), `${label}: 56px grid missing (${cosmos.gridSize})`)
   expect(cosmos.hasUploadedLogo || cosmos.logoTransform !== 'none', `${label}: logo mark missing`)
   expect(cosmos.hasUploadedLogo || cosmos.logoGradient.includes('conic-gradient'), `${label}: fallback logo gradient missing`)
-  expect(cosmos.moduleCount === 3, `${label}: expected three core modules, got ${cosmos.moduleCount}`)
-  expect(cosmos.moduleColumns === (page.viewportSize().width <= 820 ? 1 : 3), `${label}: module grid breakpoint failed`)
+  const viewportWidth = page.viewportSize().width
+  const expectedColumns = viewportWidth <= 820
+    ? 1
+    : expectedModuleCount === 4 && viewportWidth >= 1280
+      ? 4
+      : expectedModuleCount >= 3 && viewportWidth >= 1024
+        ? 3
+        : 2
+  expect(cosmos.moduleCount === expectedModuleCount, `${label}: expected ${expectedModuleCount} core modules, got ${cosmos.moduleCount}`)
+  expect(cosmos.moduleColumns === expectedColumns, `${label}: expected ${expectedColumns} module columns, got ${cosmos.moduleColumns}`)
   expect(cosmos.bootCommand.includes('boot nebula_os') && cosmos.bootCommand.includes('[OK]'), `${label}: boot line missing`)
   expect(cosmos.terminalText.includes('computer_association'), `${label}: terminal identity missing`)
   expect(cosmos.footerText.includes('EOF') && cosmos.footerText.includes('感谢阅读到底部'), `${label}: EOF footer missing`)
@@ -452,7 +463,7 @@ async function main() {
       await assertTouchTargets(page, `home-off-${width}`)
       await assertReadableText(page, `home-off-${width}`)
       await assertFramedChrome(page, `home-off-${width}`)
-      await assertCosmosHome(page, `home-off-${width}`)
+      await assertCosmosHome(page, `home-off-${width}`, 3)
       if (width === 1440) {
         const beforeScroll = await page.locator('.whoami-section').evaluate((element) => getComputedStyle(element).opacity)
         await page.locator('.whoami-section').scrollIntoViewIfNeeded()
@@ -538,7 +549,7 @@ async function main() {
       await assertNoOverflow(page, `home-on-${width}`)
       await assertReadableText(page, `home-on-${width}`)
       await assertFramedChrome(page, `home-on-${width}`)
-      await assertCosmosHome(page, `home-on-${width}`)
+      await assertCosmosHome(page, `home-on-${width}`, 4)
       expect(await page.locator('#site-navigation a[href="/lottery"]').count() === 1, `home-on-${width}: lottery nav missing`)
       expect(await page.locator('#lottery').count() === 1, `home-on-${width}: lottery section missing`)
       await revealForScreenshot(page)
@@ -624,7 +635,7 @@ async function main() {
     await assertTouchTargets(landscapePage, 'home-landscape-844x390')
     await assertReadableText(landscapePage, 'home-landscape-844x390')
     await assertFramedChrome(landscapePage, 'home-landscape-844x390')
-    await assertCosmosHome(landscapePage, 'home-landscape-844x390')
+    await assertCosmosHome(landscapePage, 'home-landscape-844x390', 4)
     await revealForScreenshot(landscapePage)
     await landscapePage.screenshot({
       path: `${ARTIFACTS}/screenshots/home-landscape-844x390.jpg`,

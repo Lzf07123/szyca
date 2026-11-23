@@ -389,7 +389,7 @@ func builtinSectionPlugins() []SectionPluginManifest {
 		},
 		{
 			Key: "lottery", Version: 1, Scope: "home", Label: "抽奖信息",
-			Description: "独立活动区块，可重复添加为多个活动信号。",
+			Description: "参与抽奖的模块卡片，可重复添加为多个活动入口。",
 			Feature:     FeatureLottery, Repeatable: true, SummaryField: "title",
 			DefaultConfig: json.RawMessage(`{"eyebrow":"现场福利","title":"抽奖信息","body":"完成答题后参与现场抽奖。","action_label":"查看活动","action_to":"/lottery"}`),
 			Fields: []SectionConfigField{

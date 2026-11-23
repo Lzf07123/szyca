@@ -82,7 +82,7 @@ interface SectionFrontendPlugin {
 ```
 
 - `layout = block`：首页逐实例独立渲染。
-- `layout = module-card`：同类或不同类卡片由一个模块布局组聚合；当前 `quiz / join` 使用此模式。
+- `layout = module-card`：同类或不同类卡片由一个模块布局组聚合；当前 `quiz / lottery / join` 使用此模式，排行榜启用时由模块配置追加。
 - 后台始终按 Manifest 的 `fields` 生成基础表单；复杂插件可提供自定义 `Editor`，在基础字段之后追加专用管理界面。
 - `Renderer` 必须只依赖传入的 `section` 和渲染上下文，不得再次按 `kind` 使用 `find` 取唯一实例。
 

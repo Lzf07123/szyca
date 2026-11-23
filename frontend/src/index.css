@@ -20,8 +20,8 @@
   --warning: #d29922;
   --error: #f85149;
   --font-sans: 'Noto Sans SC Variable', 'Noto Sans SC', 'Source Han Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --font-display: 'Space Grotesk Variable', 'Space Grotesk', 'Noto Sans SC Variable', 'Noto Sans SC', 'PingFang SC', sans-serif;
-  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  --font-display: 'Space Grotesk Variable', 'Space Grotesk', 'Noto Sans SC Variable', 'Noto Sans SC', 'Source Han Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', 'Noto Sans SC Variable', 'Noto Sans SC', 'Source Han Sans SC', 'PingFang SC', 'Microsoft YaHei', monospace;
   --grid-size: 56px;
   --radius-sm: 10px;
   --radius-md: 12px;
@@ -95,8 +95,6 @@
   --gold: var(--warning);
   --silver: #9ba7b4;
   --bronze: #c98b52;
-  --font-pixel: var(--font-display);
-  --font-retro: var(--font-mono);
   --seaglass-deep: var(--accent-primary);
   --seaglass-light: var(--brand-300);
   --paper: var(--bg-950);

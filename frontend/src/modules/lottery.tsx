@@ -7,6 +7,7 @@ export const lotteryModule = defineAppModule({
   key: 'lottery',
   label: '抽奖',
   feature: 'lottery',
+  publicMetric: true,
   routes: [
     {
       path: '/lottery',

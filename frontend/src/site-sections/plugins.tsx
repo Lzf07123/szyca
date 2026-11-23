@@ -135,7 +135,7 @@ function formatUptime(seconds: number | null, startedAt: string | null) {
   return `${years}年 ${months}月 ${remainderDays}日 ${clock}`
 }
 
-type ModuleKind = 'quiz' | 'rank' | 'join'
+type ModuleKind = 'quiz' | 'rank' | 'join' | 'lottery'
 
 function ModuleIcon({ kind }: { kind: ModuleKind }) {
   if (kind === 'quiz') {
@@ -152,6 +152,14 @@ function ModuleIcon({ kind }: { kind: ModuleKind }) {
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M4.5 19.5h15" />
         <path d="M6.5 16V11h3v5M10.5 16V6h3v10M14.5 16V8.5h3V16" />
+      </svg>
+    )
+  }
+  if (kind === 'lottery') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 7h16v3.2a2.8 2.8 0 0 0 0 3.6V17H4v-3.2a2.8 2.8 0 0 0 0-3.6Z" />
+        <path d="M9 10v4M13 10v4" />
       </svg>
     )
   }
@@ -342,6 +350,7 @@ function ActivitiesSection({ section, context }: SectionRendererProps) {
 }
 
 function ModuleCard({
+  id,
   kind,
   number,
   title,
@@ -349,6 +358,7 @@ function ModuleCard({
   to,
   openLabel = 'OPEN MODULE',
 }: {
+  id?: string
   kind: ModuleKind
   number: number
   title: string
@@ -359,6 +369,7 @@ function ModuleCard({
   const english = kind.toUpperCase()
   return (
     <article
+      id={id}
       className={`module-card module-${kind}`}
       data-reveal
       style={{ '--reveal-delay': `${(number - 1) * 90}ms` } as CSSProperties}
@@ -429,26 +440,19 @@ export function RankModuleCard({
   )
 }
 
-function LotterySection({ section, context }: SectionRendererProps) {
+function LotteryModule({ section, context }: SectionRendererProps) {
   if (!context.featureEnabled('lottery')) return null
   const config = section.config
-  const anchor = scopedSectionID('lottery', section, context)
   return (
-    <aside className="lottery-signal" id={anchor} data-reveal>
-      <div className="lottery-signal-meta">
-        <span>[EVENT / {String(context.ordinal).padStart(2, '0')}]</span>
-        <span>SIGNAL DETECTED</span>
-      </div>
-      <div>
-        <p className="section-label">LIVE EVENT / 现场福利</p>
-        <h2>{sectionConfigText(config, 'title') || '招新抽奖'}</h2>
-        <p>{sectionConfigText(config, 'body') || '完成一轮答题即可参与，结果由服务端公平生成。'}</p>
-      </div>
-      <Link className="btn btn-secondary" to={sectionConfigText(config, 'action_to') || '/lottery'}>
-        {sectionConfigText(config, 'action_label') || '查看活动'}
-        <Arrow />
-      </Link>
-    </aside>
+    <ModuleCard
+      id={scopedSectionID('lottery', section, context)}
+      kind="lottery"
+      number={context.ordinal}
+      title={sectionConfigText(config, 'title') || '招新抽奖'}
+      description={sectionConfigText(config, 'body') || '完成一轮答题即可参与，结果由服务端公平生成。'}
+      to={sectionConfigText(config, 'action_to') || '/lottery'}
+      openLabel={sectionConfigText(config, 'action_label') || '查看活动'}
+    />
   )
 }
 
@@ -521,8 +525,8 @@ export const QUIZ_SECTION_PLUGIN = defineSectionPlugin({
 export const LOTTERY_SECTION_PLUGIN = defineSectionPlugin({
   key: 'lottery',
   version: 1,
-  layout: 'block',
-  Renderer: LotterySection,
+  layout: 'module-card',
+  Renderer: LotteryModule,
 })
 
 export const JOIN_SECTION_PLUGIN = defineSectionPlugin({
