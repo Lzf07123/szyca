@@ -1,7 +1,7 @@
 # szyca API
 
-> 版本：2.2
-> 更新：2026-11-23  
+> 版本：2.3
+> 更新：2026-11-24
 > 所有 API 使用同源 Cookie 或 Bearer token；未声明为后台的接口不要求管理员会话。
 
 ## 1. 通用约定
@@ -74,9 +74,10 @@
 ```
 
 - `features` 只允许 `quiz / lottery / join / screen`。
-- `sections.kind` 必须是后端已注册的 Section 插件 key；内置插件为 `hero / about / activities / quiz / lottery / join / gallery`。
+- `sections.kind` 必须是后端已注册的 Section 插件 key；内置插件为 `hero / about / activities / quiz / screen / lottery / join / gallery`。
 - `sections.plugin_version` 表示插件契约版本；同一 `kind` 可以有多个独立实例，以 `id` 区分。
 - `gallery` Section 额外返回 `gallery` 数组，条目包含 `id / section_id / title / image_url / sort / created_at / updated_at`。
+- `qrcodes` 由 Join 模块的 `QrcodeProvider` 贡献；公开条目只包含 `id / title / image_url`。
 - 关闭功能时导航和对应 Section 同步移除。
 - 响应带 ETag；`If-None-Match` 命中时返回 304。
 - `Cache-Control: public, max-age=0, must-revalidate`，保证配置尽快生效。
@@ -84,6 +85,31 @@
 ### GET `/api/content/pages/{slug}`
 
 返回已发布页面；不存在或尚未发布返回 404。
+
+### GET `/api/config`
+
+兼容旧客户端和现场页面的聚合配置。当前字段：
+
+```json
+{
+  "title": "计算机协会 · 招新答题",
+  "quiz_state": "stop",
+  "question_seconds": 20,
+  "announcement": "",
+  "footer": {},
+  "logo_url": "",
+  "features": {
+    "quiz": true,
+    "lottery": false,
+    "join": true,
+    "screen": true
+  }
+}
+```
+
+- `quiz_state / question_seconds / title` 由 Quiz 的 `ConfigContributor` 贡献；
+- `announcement` 由 Realtime 的 `ConfigContributor` 贡献；
+- `footer / logo_url / features` 由 core site 提供。
 
 ## 4. 答题
 
@@ -98,10 +124,9 @@
 | POST | `/api/quiz/round/abandon` | 放弃当前轮 |
 | POST | `/api/answer` | 提交当前题 |
 | GET | `/api/me` | 个人成绩与排名 |
-| GET | `/api/rank?top=99` | 排行榜 |
 | GET | `/api/stats` | 聚合统计：参与人数、累计答题、启用题目数、在线连接数 |
 | GET | `/api/runtime` | 公开系统运行时长；返回 `uptime_seconds` 与 `started_at`，`Cache-Control: no-store` |
-| GET | `/ws` | 实时更新 WebSocket |
+| GET | `/ws` | Realtime 模块提供的实时更新 WebSocket |
 
 答题完整性约束：
 
@@ -110,6 +135,16 @@
 - `request_id` 全局幂等。
 - `(user_id, round_no, question_id)` 只允许一条计分记录。
 - 服务端判定本题截止时间。
+
+### 4.1 排行榜与大屏
+
+| 方法 | 路径 | 所属模块 | 约束 |
+|---|---|---|---|
+| GET | `/api/rank?top=99` | `screen` | 受 `screen` feature 控制 |
+| GET | `/ws` | `realtime` | `quiz` 或 `screen` 任一开启即可连接 |
+
+`/api/rank` 只读取 Quiz 的排名服务，不写 Quiz 表。WebSocket 推送状态、排名、
+公告和特效事件。
 
 ## 5. 抽奖
 
@@ -202,7 +237,7 @@
 | DELETE | `/api/admin/gallery/{sectionID}/images/{imageID}` | `site.write` |
 | PUT | `/api/admin/gallery/{sectionID}/images/order` | `site.write`，body：`{"ids":[...]}` |
 | GET | `/api/admin/platform/features` | `site.read` |
-| PUT | `/api/admin/platform/features` | 按模块检查 `site.write` / `lottery.configure` |
+| PUT | `/api/admin/platform/features` | 按模块 `feature_write_capability` 检查权限 |
 | GET | `/api/admin/media` | `media.read` |
 | DELETE | `/api/admin/media/{id}` | `media.write`，存在引用时返回 409 |
 
@@ -233,9 +268,11 @@
 - 同一 `kind` 可以有多个实例；是否允许重复及最大数量由插件 Manifest 的 `repeatable / max_instances` 决定，内置插件均允许重复且数量不限。
 - 校验、删除、新增和更新处于同一数据库事务，任一失败均不落地。
 
-`GET /api/admin/site/section-plugins` 返回 `{"plugins":[...]}`。Manifest 包含 `key / version / scope / label / description / feature / repeatable / max_instances / summary_field / default_config / fields`，后台根据 `fields` 生成通用配置表单。插件开发契约见 [Section插件开发.md](Section插件开发.md)。
+`GET /api/admin/site/section-plugins` 返回 `{"plugins":[...]}`。Manifest 包含 `key / version / scope / label / description / feature / repeatable / max_instances / summary_field / default_config / fields`，后台根据 `fields` 生成通用配置表单。模块 `module.json` 另保存 `layout / home_order` 等编译期元数据。插件开发契约见 [Section插件开发.md](Section插件开发.md)。
 
-活动影像使用独立 `gallery_images` 数据，不再把图片数组写进 Section `config`。每个 gallery Section 最多 4 张图片；上传文件只支持 JPG/PNG/WebP/GIF，单张不超过 10MB。本地文件自动登记 `media` 引用；删除图片或删除整个 gallery Section 时，只有在没有其他资源引用后才清理磁盘文件。
+`GET /api/admin/overview` 由 core 合并各模块 `OverviewContributor`，当前 Quiz 贡献用户、答题、参与者和题目数据，core 贡献在线连接、背景数量、运行时间、Goroutine 和内存。
+
+活动影像使用 Gallery 模块独立拥有的 `gallery_images` 数据，不把图片数组写进 Section `config`。每个 gallery Section 最多 4 张图片；上传文件只支持 JPG/PNG/WebP/GIF，单张不超过 10MB。本地文件自动登记 `media` 引用；删除图片或删除整个 gallery Section 时，只有在没有其他资源引用后才清理磁盘文件。
 
 ### 抽奖运营
 
@@ -259,7 +296,22 @@
 | `event_operator` | 答题控制、抽奖配置与领取 |
 | `data_viewer` | 题目/成绩只读、审计只读 |
 
-## 7. 兼容期
+## 7. 模块归属索引
+
+| API 前缀/路径 | 所属模块 |
+|---|---|
+| `/api/session`、`/api/identity/*`、`/api/quiz/*`、`/api/answer`、`/api/me`、`/api/stats` | `quiz` |
+| `/api/rank` | `screen` |
+| `/api/lottery/*` | `lottery` |
+| `/api/qrcode`、`/api/admin/qrcodes*` | `join` |
+| `/ws`、`/api/admin/announce`、`/api/admin/effect` | `realtime` |
+| `/api/admin/gallery/*` | `gallery` |
+| `/api/site`、`/api/config`、Section、功能开关、背景、页脚和 Logo | core + contributors |
+
+模块定义、后端接口、前端 runtime、迁移和测试要求见
+[模块开发契约.md](模块开发契约.md)。
+
+## 8. 兼容期
 
 - `/api/config`、`/api/backgrounds`、`/api/qrcode` 保留给旧客户端。
 - 旧 `X-Admin-Token` 默认关闭；仅设置 `LEGACY_ADMIN_TOKEN_ENABLED=true` 时在迁移窗口启用。

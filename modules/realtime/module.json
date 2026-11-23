@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "key": "realtime",
+  "label": "实时推送",
+  "feature": "",
+  "path": "",
+  "nav_label": "",
+  "nav_order": 0,
+  "footer_label": "",
+  "public_metric": false,
+  "feature_write_capability": "",
+  "requires": ["quiz"],
+  "routes": [
+    { "path": "/ws" },
+    { "path": "/api/admin/announce" },
+    { "path": "/api/admin/effect" }
+  ],
+  "capabilities": [],
+  "admin_panels": [
+    {
+      "key": "realtime-operations",
+      "tab": "control",
+      "label": "公告与特效",
+      "permission": "quiz.operate",
+      "order": 20
+    }
+  ]
+}

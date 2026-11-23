@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "key": "screen",
+  "label": "排行榜",
+  "feature": "screen",
+  "path": "/screen",
+  "nav_label": "排行榜",
+  "nav_order": 50,
+  "footer_label": "排行榜",
+  "public_metric": true,
+  "feature_write_capability": "site.write",
+  "requires": ["quiz", "realtime"],
+  "routes": [
+    { "path": "/screen", "feature": "screen", "fullscreen": true },
+    { "path": "/api/rank", "feature": "screen" }
+  ],
+  "capabilities": [],
+  "sections": [
+    {
+      "key": "screen",
+      "version": 1,
+      "scope": "home",
+      "layout": "module-card",
+      "home_order": 45,
+      "label": "排行榜入口",
+      "description": "在现场大屏查看实时成绩与排名。",
+      "feature": "screen",
+      "repeatable": true,
+      "max_instances": 0,
+      "summary_field": "title",
+      "default_config": {
+        "eyebrow": "现场大屏",
+        "title": "实时排行",
+        "body": "成绩与名次实时更新，在共同时区里看见每一次进步。",
+        "action_label": "查看排行",
+        "action_to": "/screen"
+      },
+      "fields": [
+        { "key": "eyebrow", "label": "眉题", "type": "text", "group": "content", "group_label": "模块文案", "max_length": 120 },
+        { "key": "title", "label": "标题", "type": "text", "group": "content", "group_label": "模块文案", "max_length": 120 },
+        { "key": "body", "label": "正文", "type": "textarea", "group": "content", "group_label": "模块文案", "max_length": 1000 },
+        { "key": "action_label", "label": "按钮文案", "type": "text", "group": "actions", "group_label": "模块入口", "max_length": 120 },
+        { "key": "action_to", "label": "站内路径", "type": "path", "group": "actions", "group_label": "模块入口", "placeholder": "/screen", "max_length": 1000 }
+      ]
+    }
+  ]
+}

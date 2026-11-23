@@ -7,26 +7,38 @@
 node_modules/
 dist/
 build/
+bin/
+vendor/
 *.local
+/server
 
-# Go
-backend/bin/
-backend/vendor/
+# Go 测试与覆盖率
+*.test
+*.out
+coverage.*
 
 # 日志与临时文件
 *.log
 .DS_Store
+Thumbs.db
+*.swp
 tmp/
 coverage/
+
+# Python 测试缓存
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Playwright 默认产物
+playwright-report/
+test-results/
 
 # 题库数据（通过后台导入，不进入源码仓库）
 题库/
 
 # 浏览器截图、性能与验收报告等可再生成产物
 artifacts/
-
-# 已被当前架构文档取代的历史方案
-docs/实现方案.md
 
 # IDE
 .idea/

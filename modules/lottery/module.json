@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "key": "lottery",
+  "label": "抽奖",
+  "feature": "lottery",
+  "path": "/lottery",
+  "nav_label": "抽奖",
+  "nav_order": 40,
+  "footer_label": "",
+  "public_metric": true,
+  "feature_write_capability": "lottery.configure",
+  "requires": ["quiz"],
+  "routes": [
+    { "path": "/lottery", "feature": "lottery" },
+    { "path": "/api/lottery/campaign" },
+    { "path": "/api/lottery/draw" },
+    { "path": "/api/lottery/me" }
+  ],
+  "sections": [
+    {
+      "key": "lottery",
+      "version": 1,
+      "scope": "home",
+      "layout": "module-card",
+      "home_order": 50,
+      "label": "抽奖信息",
+      "description": "参与抽奖的模块卡片，可重复添加为多个活动入口。",
+      "feature": "lottery",
+      "repeatable": true,
+      "max_instances": 0,
+      "summary_field": "title",
+      "default_config": {
+        "eyebrow": "现场福利",
+        "title": "抽奖信息",
+        "body": "完成答题后参与现场抽奖。",
+        "action_label": "查看活动",
+        "action_to": "/lottery"
+      },
+      "fields": [
+        { "key": "eyebrow", "label": "眉题", "type": "text", "group": "content", "group_label": "活动文案", "max_length": 120 },
+        { "key": "title", "label": "标题", "type": "text", "group": "content", "group_label": "活动文案", "max_length": 120 },
+        { "key": "body", "label": "正文", "type": "textarea", "group": "content", "group_label": "活动文案", "max_length": 1000 },
+        { "key": "action_label", "label": "按钮文案", "type": "text", "group": "actions", "group_label": "活动入口", "max_length": 120 },
+        { "key": "action_to", "label": "站内路径", "type": "path", "group": "actions", "group_label": "活动入口", "placeholder": "/lottery", "max_length": 1000 }
+      ]
+    }
+  ],
+  "capabilities": [
+    { "key": "lottery.configure", "label": "抽奖配置", "roles": ["event_operator"] },
+    { "key": "lottery.claim", "label": "奖品核销", "roles": ["event_operator"] }
+  ],
+  "admin_tabs": [
+    { "key": "lottery", "label": "抽奖", "group": "operations", "permission": "lottery.configure", "order": 30 }
+  ],
+  "admin_panels": [
+    {
+      "key": "lottery-admin",
+      "tab": "lottery",
+      "label": "抽奖",
+      "permission": "lottery.configure",
+      "order": 10
+    }
+  ]
+}

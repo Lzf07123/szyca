@@ -9,6 +9,23 @@ const ARTIFACTS = process.env.ARTIFACT_DIR || '/artifacts/browser'
 const BROWSER_EXECUTABLE_PATH = process.env.BROWSER_EXECUTABLE_PATH || ''
 const widths = [320, 360, 390, 414, 480, 600, 768, 820, 900, 1024, 1180, 1280, 1440, 1920]
 const errors = []
+const moduleCatalog = JSON.parse(await fs.readFile(
+  new URL('../../frontend/src/generated/module-catalog.generated.json', import.meta.url),
+  'utf8',
+))
+const sectionLayouts = new Map(moduleCatalog.modules.flatMap((module) => (
+  module.sections.map((section) => [`${section.key}@${section.version}`, section.layout])
+)))
+
+async function loadModuleScenarios() {
+  const scenarios = []
+  for (const module of moduleCatalog.modules) {
+    const testURL = new URL(`../../modules/${module.key}/tests/browser.mjs`, import.meta.url)
+    const facet = await import(`${testURL.href}?v=${Date.now()}`)
+    scenarios.push(...(facet.scenarios ?? []))
+  }
+  return scenarios
+}
 
 await fs.mkdir(`${ARTIFACTS}/screenshots`, { recursive: true })
 
@@ -82,6 +99,16 @@ async function setLotterySection(admin, enabled) {
   })
   expect(response.status === 200, `set lottery section failed: ${JSON.stringify(response.payload)}`)
   return sections.find((section) => section.kind === 'lottery')?.enabled === true
+}
+
+async function expectedHomeModuleCount() {
+  const site = await api('/api/site')
+  expect(site.status === 200, `could not read public site: ${site.status}`)
+  return site.payload.sections.filter((section) => (
+    section.enabled
+    && section.status === 'published'
+    && sectionLayouts.get(`${section.kind}@${section.plugin_version || 1}`) === 'module-card'
+  )).length
 }
 
 async function ensureCampaign(admin) {
@@ -304,7 +331,7 @@ async function assertCosmosHome(page, label, expectedModuleCount) {
   const viewportWidth = page.viewportSize().width
   const expectedColumns = viewportWidth <= 820
     ? 1
-    : expectedModuleCount === 4 && viewportWidth >= 1280
+    : expectedModuleCount >= 4 && viewportWidth >= 1280
       ? 4
       : expectedModuleCount >= 3 && viewportWidth >= 1024
         ? 3
@@ -443,6 +470,7 @@ async function main() {
   await setLottery(admin, false)
   const originalLotterySection = await setLotterySection(admin, false)
   const campaignID = await ensureCampaign(admin)
+  const offModuleCount = await expectedHomeModuleCount()
 
   const browser = await chromium.launch({
     headless: true,
@@ -463,7 +491,7 @@ async function main() {
       await assertTouchTargets(page, `home-off-${width}`)
       await assertReadableText(page, `home-off-${width}`)
       await assertFramedChrome(page, `home-off-${width}`)
-      await assertCosmosHome(page, `home-off-${width}`, 3)
+      await assertCosmosHome(page, `home-off-${width}`, offModuleCount)
       if (width === 1440) {
         const beforeScroll = await page.locator('.whoami-section').evaluate((element) => getComputedStyle(element).opacity)
         await page.locator('.whoami-section').scrollIntoViewIfNeeded()
@@ -541,6 +569,8 @@ async function main() {
 
     await setLotterySection(admin, true)
     await setLottery(admin, true)
+    const onModuleCount = await expectedHomeModuleCount()
+    expect(onModuleCount === offModuleCount + 1, `lottery should add one module card: ${offModuleCount} -> ${onModuleCount}`)
     for (const width of widths) {
       const context = await browser.newContext({ viewport: { width, height: 900 } })
       const page = await context.newPage()
@@ -549,7 +579,7 @@ async function main() {
       await assertNoOverflow(page, `home-on-${width}`)
       await assertReadableText(page, `home-on-${width}`)
       await assertFramedChrome(page, `home-on-${width}`)
-      await assertCosmosHome(page, `home-on-${width}`, 4)
+      await assertCosmosHome(page, `home-on-${width}`, onModuleCount)
       expect(await page.locator('#site-navigation a[href="/lottery"]').count() === 1, `home-on-${width}: lottery nav missing`)
       expect(await page.locator('#lottery').count() === 1, `home-on-${width}: lottery section missing`)
       await revealForScreenshot(page)
@@ -558,10 +588,7 @@ async function main() {
     }
 
     const pages = [
-      ['/join', '加入我们 · 计算机协会'],
-      ['/quiz', '答题挑战 · 计算机协会'],
-      ['/screen', '实时排行榜 · 计算机协会'],
-      ['/lottery', '招新抽奖 · 计算机协会'],
+      ...(await loadModuleScenarios()).map((scenario) => [scenario.path, scenario.title]),
       ['/not-a-page', '页面不存在 · 计算机协会'],
     ]
     const routeWidths = [320, 390, 768, 1024, 1440]
@@ -635,7 +662,7 @@ async function main() {
     await assertTouchTargets(landscapePage, 'home-landscape-844x390')
     await assertReadableText(landscapePage, 'home-landscape-844x390')
     await assertFramedChrome(landscapePage, 'home-landscape-844x390')
-    await assertCosmosHome(landscapePage, 'home-landscape-844x390', 4)
+    await assertCosmosHome(landscapePage, 'home-landscape-844x390', onModuleCount)
     await revealForScreenshot(landscapePage)
     await landscapePage.screenshot({
       path: `${ARTIFACTS}/screenshots/home-landscape-844x390.jpg`,
@@ -716,7 +743,7 @@ async function main() {
     await fallbackPage.route('**/api/site', (route) => route.abort())
     await fallbackPage.goto(BASE + '/', { waitUntil: 'networkidle' })
     expect(await fallbackPage.getByText('站点配置暂时不可用，正在显示静态内容。').count() === 1, 'fallback banner missing')
-    const fallbackHeading = (await fallbackPage.locator('#hero-title').textContent())?.trim()
+    const fallbackHeading = (await fallbackPage.locator('#hero-title').getAttribute('aria-label'))?.trim()
     expect(fallbackHeading === '把好奇心，写进每一行代码', `fallback home missing: ${fallbackHeading}`)
     await fallback.close()
 

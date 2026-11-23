@@ -1,15 +1,7 @@
 import type { AppModuleManifest, AppModuleRoute } from './contract'
-import { joinModule } from './join'
-import { lotteryModule } from './lottery'
-import { quizModule } from './quiz'
-import { screenModule } from './screen'
+import { MODULE_RUNTIMES } from './registry.generated'
 
-export const APP_MODULES: readonly AppModuleManifest[] = [
-  joinModule,
-  quizModule,
-  lotteryModule,
-  screenModule,
-]
+export const APP_MODULES: readonly AppModuleManifest[] = MODULE_RUNTIMES.map((runtime) => runtime.manifest)
 
 function validateRegistry(modules: readonly AppModuleManifest[]) {
   const moduleKeys = new Set<string>()
@@ -19,7 +11,7 @@ function validateRegistry(modules: readonly AppModuleManifest[]) {
       throw new Error(`Duplicate app module key: ${module.key}`)
     }
     moduleKeys.add(module.key)
-    if (module.routes.length === 0) {
+    if (module.routes.length === 0 && !module.internal) {
       throw new Error(`App module ${module.key} has no routes`)
     }
     for (const route of module.routes) {
@@ -71,10 +63,4 @@ export function moduleForFeature(feature: string): AppModuleManifest | undefined
 
 export function isFullscreenPath(pathname: string): boolean {
   return findModuleRoute(pathname)?.route.fullscreen === true
-}
-
-export function enabledPublicMetricCount(featureEnabled: (key: string) => boolean): number {
-  return APP_MODULES.filter((module) => (
-    module.publicMetric && module.feature && featureEnabled(module.feature)
-  )).length
 }

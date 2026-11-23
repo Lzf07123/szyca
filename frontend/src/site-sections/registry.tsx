@@ -1,22 +1,16 @@
 import type { SectionFrontendPlugin } from './contract'
-import {
-  ABOUT_SECTION_PLUGIN,
-  ACTIVITIES_SECTION_PLUGIN,
-  GALLERY_SECTION_PLUGIN,
-  HERO_SECTION_PLUGIN,
-  JOIN_SECTION_PLUGIN,
-  LOTTERY_SECTION_PLUGIN,
-  QUIZ_SECTION_PLUGIN,
-} from './plugins'
+import { MODULE_RUNTIMES } from '../modules/registry.generated'
+import { ABOUT_SECTION_PLUGIN } from './about'
+import { ACTIVITIES_SECTION_PLUGIN } from './activities'
+import { HERO_SECTION_PLUGIN } from './hero'
 
 export const SECTION_FRONTEND_PLUGINS: readonly SectionFrontendPlugin[] = [
   HERO_SECTION_PLUGIN,
   ABOUT_SECTION_PLUGIN,
   ACTIVITIES_SECTION_PLUGIN,
-  QUIZ_SECTION_PLUGIN,
-  LOTTERY_SECTION_PLUGIN,
-  JOIN_SECTION_PLUGIN,
-  GALLERY_SECTION_PLUGIN,
+  ...MODULE_RUNTIMES.flatMap((runtime) => (
+    (runtime.sections ?? []) as readonly SectionFrontendPlugin[]
+  )),
 ]
 
 function indexPlugins(plugins: readonly SectionFrontendPlugin[]) {

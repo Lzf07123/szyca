@@ -10,18 +10,17 @@ import (
 	"syscall"
 	"time"
 
-	"szyca/internal/access"
-	"szyca/internal/audit"
-	"szyca/internal/config"
-	"szyca/internal/httpapi"
-	"szyca/internal/lottery"
-	"szyca/internal/media"
-	"szyca/internal/publish"
-	"szyca/internal/quiz"
-	"szyca/internal/rank"
-	"szyca/internal/site"
-	"szyca/internal/store"
-	"szyca/internal/ws"
+	"szyca/backend/contract"
+	"szyca/backend/core/access"
+	"szyca/backend/core/audit"
+	"szyca/backend/core/config"
+	"szyca/backend/core/httpapi"
+	"szyca/backend/core/media"
+	"szyca/backend/core/moduleregistry"
+	"szyca/backend/core/publish"
+	"szyca/backend/core/rank"
+	"szyca/backend/core/site"
+	"szyca/backend/core/store"
 )
 
 func main() {
@@ -60,17 +59,54 @@ func main() {
 		log.Fatalf("site defaults: %v", err)
 	}
 
-	svc := quiz.New(st, rk, pub, cfg.Title, cfg.QuestionSeconds, cfg.AnswerGraceSeconds)
-	svc.StartLeaderboardRefresh(ctx)
-	siteSvc := site.New(st.Pool(), cfg.Title)
 	mediaSvc := media.New(st.Pool())
-	lotterySvc := lottery.New(st.Pool(), svc, cfg.QuizCount)
-	hub := ws.NewHub(svc, pub.Subscribe(ctx)) // 排行榜改走 DB 全量排名
-	go hub.Run(ctx)
+	runtime, err := moduleregistry.Build(ctx, map[string]any{
+		"config":  cfg,
+		"store":   st,
+		"rank":    rk,
+		"publish": pub,
+	})
+	if err != nil {
+		log.Fatalf("modules: %v", err)
+	}
+	if err := runtime.Start(ctx); err != nil {
+		log.Fatalf("start modules: %v", err)
+	}
+	quizValue, ok := runtime.Service("quiz")
+	if !ok {
+		log.Fatal("quiz module service missing")
+	}
+	quizSvc, ok := quizValue.(contract.IdentityValidator)
+	if !ok {
+		log.Fatal("quiz module does not implement contract.IdentityValidator")
+	}
+	realtimeValue, ok := runtime.Service("realtime")
+	if !ok {
+		log.Fatal("realtime module service missing")
+	}
+	realtimeSvc, ok := realtimeValue.(contract.RealtimeRuntime)
+	if !ok {
+		log.Fatal("realtime module does not implement contract.RealtimeRuntime")
+	}
+	hub := realtimeSvc.Counter()
+	var siteSvc *site.Service
+	var qrcodeProvider site.QrcodeProvider
+	if joinValue, ok := runtime.Service("join"); ok {
+		qrcodeProvider, _ = joinValue.(site.QrcodeProvider)
+	}
+	var galleryProvider site.GalleryProvider
+	if galleryValue, ok := runtime.Service("gallery"); ok {
+		provider, ok := galleryValue.(site.GalleryProvider)
+		if !ok {
+			log.Fatal("gallery module does not implement site.GalleryProvider")
+		}
+		galleryProvider = provider
+	}
+	siteSvc = site.NewWithProviders(st.Pool(), cfg.Title, galleryProvider, qrcodeProvider)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           httpapi.New(cfg, svc, siteSvc, mediaSvc, lotterySvc, accessSvc, auditSvc, hub).Handler(),
+		Handler:           httpapi.New(cfg, quizSvc, runtime, siteSvc, mediaSvc, accessSvc, auditSvc, hub).Handler(runtime.List()...),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -86,6 +122,7 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
+	_ = runtime.Stop(shutdownCtx)
 }
 
 // openStoreWithRetry 等待 compose 里 postgres 就绪（最多 30s）。

@@ -56,3 +56,11 @@ export function sectionConfigItems(config: SectionConfig, key = 'items'): Sectio
     ? value.filter((item): item is SectionItem => Boolean(item) && typeof item === 'object')
     : []
 }
+
+export function sectionAnchor(
+  base: string,
+  section: HomeSection,
+  context: SectionRenderContext,
+): string {
+  return context.instanceIndex === 0 ? base : `${base}-${section.id}`
+}

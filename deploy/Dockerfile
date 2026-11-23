@@ -4,25 +4,27 @@ ARG SOURCE_MIRROR=
 
 FROM ${BASE_IMAGE_REGISTRY}node:20-alpine AS frontend
 ARG SOURCE_MIRROR
-WORKDIR /frontend
+WORKDIR /app/frontend
 RUN if [ "$SOURCE_MIRROR" = "cn" ]; then \
         npm config set registry https://registry.npmmirror.com/; \
     fi
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
+COPY modules/ /app/modules/
 RUN npm run build
 
 FROM ${BASE_IMAGE_REGISTRY}golang:1.22-alpine AS backend
 ARG SOURCE_MIRROR
-WORKDIR /backend
+WORKDIR /src
 RUN if [ "$SOURCE_MIRROR" = "cn" ]; then \
         go env -w GOPROXY=https://goproxy.cn,direct; \
     fi
-COPY backend/go.mod backend/go.sum ./
+COPY go.mod go.sum ./
 RUN go mod download
-COPY backend/ ./
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server
+COPY backend/ ./backend/
+COPY modules/ ./modules/
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/server ./backend/cmd/server
 
 # 单容器运行时：Nginx + Go + PostgreSQL + Redis + Supervisor。
 # 使用纯 Alpine 可避免官方 postgres 镜像继承的匿名数据卷。
@@ -38,7 +40,7 @@ RUN if [ "$SOURCE_MIRROR" = "cn" ]; then \
     && rm -f /etc/nginx/http.d/default.conf
 
 COPY --from=backend /out/server /app/server
-COPY --from=frontend /frontend/dist /app/web
+COPY --from=frontend /app/frontend/dist /app/web
 COPY deploy/nginx/nginx.conf /etc/nginx/http.d/default.conf
 COPY deploy/supervisord.conf /etc/supervisord.conf
 COPY deploy/single-entrypoint.sh /usr/local/bin/single-entrypoint.sh

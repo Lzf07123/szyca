@@ -1,0 +1,42 @@
+{
+  "schema": 1,
+  "key": "gallery",
+  "label": "活动影像",
+  "feature": "",
+  "path": "",
+  "nav_label": "",
+  "nav_order": 0,
+  "footer_label": "",
+  "public_metric": false,
+  "feature_write_capability": "",
+  "requires": [],
+  "routes": [
+    { "path": "/api/admin/gallery/{sectionID}/images" }
+  ],
+  "capabilities": [],
+  "sections": [
+    {
+      "key": "gallery",
+      "version": 2,
+      "scope": "home",
+      "layout": "block",
+      "home_order": 70,
+      "label": "活动影像",
+      "description": "展示活动图片与其他现场影像，可重复添加多个图集。",
+      "feature": "",
+      "repeatable": true,
+      "max_instances": 0,
+      "summary_field": "title",
+      "default_config": {
+        "eyebrow": "协会现场",
+        "title": "活动影像",
+        "body": "技术分享、比赛与协作时刻。"
+      },
+      "fields": [
+        { "key": "eyebrow", "label": "眉题", "type": "text", "group": "content", "group_label": "影像文案", "max_length": 120 },
+        { "key": "title", "label": "标题", "type": "text", "group": "content", "group_label": "影像文案", "max_length": 120 },
+        { "key": "body", "label": "正文", "type": "textarea", "group": "content", "group_label": "影像文案", "max_length": 1000 }
+      ]
+    }
+  ]
+}

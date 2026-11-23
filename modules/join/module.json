@@ -1,0 +1,57 @@
+{
+  "schema": 1,
+  "key": "join",
+  "label": "加入我们",
+  "feature": "join",
+  "path": "/join",
+  "nav_label": "加入我们",
+  "nav_order": 20,
+  "footer_label": "加入我们",
+  "public_metric": true,
+  "feature_write_capability": "site.write",
+  "requires": [],
+  "routes": [
+    { "path": "/join", "feature": "join" },
+    { "path": "/api/qrcode" },
+    { "path": "/api/admin/qrcodes" }
+  ],
+  "sections": [
+    {
+      "key": "join",
+      "version": 1,
+      "scope": "home",
+      "layout": "module-card",
+      "home_order": 60,
+      "label": "加入我们",
+      "description": "一个独立的加入入口卡片，可重复添加。",
+      "feature": "join",
+      "repeatable": true,
+      "max_instances": 0,
+      "summary_field": "title",
+      "default_config": {
+        "eyebrow": "保持联系",
+        "title": "加入我们",
+        "body": "扫码加入招新群，获取后续活动信息。",
+        "action_label": "查看加入方式",
+        "action_to": "/join"
+      },
+      "fields": [
+        { "key": "eyebrow", "label": "眉题", "type": "text", "group": "content", "group_label": "模块文案", "max_length": 120 },
+        { "key": "title", "label": "标题", "type": "text", "group": "content", "group_label": "模块文案", "max_length": 120 },
+        { "key": "body", "label": "正文", "type": "textarea", "group": "content", "group_label": "模块文案", "max_length": 1000 },
+        { "key": "action_label", "label": "按钮文案", "type": "text", "group": "actions", "group_label": "模块入口", "max_length": 120 },
+        { "key": "action_to", "label": "站内路径", "type": "path", "group": "actions", "group_label": "模块入口", "placeholder": "/join", "max_length": 1000 }
+      ]
+    }
+  ],
+  "capabilities": [],
+  "admin_panels": [
+    {
+      "key": "join-qrcodes",
+      "tab": "control",
+      "label": "加入我们 · 二维码",
+      "permission": "site.write",
+      "order": 30
+    }
+  ]
+}

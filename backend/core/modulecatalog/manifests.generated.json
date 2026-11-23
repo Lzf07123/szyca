@@ -1,0 +1,588 @@
+{
+  "modules": [
+    {
+      "schema": 1,
+      "key": "gallery",
+      "label": "活动影像",
+      "requires": [],
+      "routes": [
+        {
+          "path": "/api/admin/gallery/{sectionID}/images"
+        }
+      ],
+      "capabilities": [],
+      "admin_tabs": [],
+      "admin_panels": [],
+      "sections": [
+        {
+          "key": "gallery",
+          "version": 2,
+          "scope": "home",
+          "layout": "block",
+          "home_order": 70,
+          "label": "活动影像",
+          "description": "展示活动图片与其他现场影像，可重复添加多个图集。",
+          "repeatable": true,
+          "max_instances": 0,
+          "summary_field": "title",
+          "default_config": {
+            "body": "技术分享、比赛与协作时刻。",
+            "eyebrow": "协会现场",
+            "title": "活动影像"
+          },
+          "fields": [
+            {
+              "key": "eyebrow",
+              "label": "眉题",
+              "type": "text",
+              "group": "content",
+              "group_label": "影像文案",
+              "max_length": 120
+            },
+            {
+              "key": "title",
+              "label": "标题",
+              "type": "text",
+              "group": "content",
+              "group_label": "影像文案",
+              "max_length": 120
+            },
+            {
+              "key": "body",
+              "label": "正文",
+              "type": "textarea",
+              "group": "content",
+              "group_label": "影像文案",
+              "max_length": 1000
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "key": "join",
+      "label": "加入我们",
+      "feature": "join",
+      "path": "/join",
+      "nav_label": "加入我们",
+      "nav_order": 20,
+      "footer_label": "加入我们",
+      "public_metric": true,
+      "feature_write_capability": "site.write",
+      "requires": [],
+      "routes": [
+        {
+          "path": "/join",
+          "feature": "join"
+        },
+        {
+          "path": "/api/qrcode"
+        },
+        {
+          "path": "/api/admin/qrcodes"
+        }
+      ],
+      "capabilities": [],
+      "admin_tabs": [],
+      "admin_panels": [
+        {
+          "key": "join-qrcodes",
+          "tab": "control",
+          "label": "加入我们 · 二维码",
+          "permission": "site.write",
+          "order": 30
+        }
+      ],
+      "sections": [
+        {
+          "key": "join",
+          "version": 1,
+          "scope": "home",
+          "layout": "module-card",
+          "home_order": 60,
+          "label": "加入我们",
+          "description": "一个独立的加入入口卡片，可重复添加。",
+          "feature": "join",
+          "repeatable": true,
+          "max_instances": 0,
+          "summary_field": "title",
+          "default_config": {
+            "action_label": "查看加入方式",
+            "action_to": "/join",
+            "body": "扫码加入招新群，获取后续活动信息。",
+            "eyebrow": "保持联系",
+            "title": "加入我们"
+          },
+          "fields": [
+            {
+              "key": "eyebrow",
+              "label": "眉题",
+              "type": "text",
+              "group": "content",
+              "group_label": "模块文案",
+              "max_length": 120
+            },
+            {
+              "key": "title",
+              "label": "标题",
+              "type": "text",
+              "group": "content",
+              "group_label": "模块文案",
+              "max_length": 120
+            },
+            {
+              "key": "body",
+              "label": "正文",
+              "type": "textarea",
+              "group": "content",
+              "group_label": "模块文案",
+              "max_length": 1000
+            },
+            {
+              "key": "action_label",
+              "label": "按钮文案",
+              "type": "text",
+              "group": "actions",
+              "group_label": "模块入口",
+              "max_length": 120
+            },
+            {
+              "key": "action_to",
+              "label": "站内路径",
+              "type": "path",
+              "placeholder": "/join",
+              "group": "actions",
+              "group_label": "模块入口",
+              "max_length": 1000
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "key": "lottery",
+      "label": "抽奖",
+      "feature": "lottery",
+      "path": "/lottery",
+      "nav_label": "抽奖",
+      "nav_order": 40,
+      "public_metric": true,
+      "feature_write_capability": "lottery.configure",
+      "requires": [
+        "quiz"
+      ],
+      "routes": [
+        {
+          "path": "/lottery",
+          "feature": "lottery"
+        },
+        {
+          "path": "/api/lottery/campaign"
+        },
+        {
+          "path": "/api/lottery/draw"
+        },
+        {
+          "path": "/api/lottery/me"
+        }
+      ],
+      "capabilities": [
+        {
+          "key": "lottery.configure",
+          "label": "抽奖配置",
+          "roles": [
+            "event_operator"
+          ]
+        },
+        {
+          "key": "lottery.claim",
+          "label": "奖品核销",
+          "roles": [
+            "event_operator"
+          ]
+        }
+      ],
+      "admin_tabs": [
+        {
+          "key": "lottery",
+          "label": "抽奖",
+          "group": "operations",
+          "permission": "lottery.configure",
+          "order": 30
+        }
+      ],
+      "admin_panels": [
+        {
+          "key": "lottery-admin",
+          "tab": "lottery",
+          "label": "抽奖",
+          "permission": "lottery.configure",
+          "order": 10
+        }
+      ],
+      "sections": [
+        {
+          "key": "lottery",
+          "version": 1,
+          "scope": "home",
+          "layout": "module-card",
+          "home_order": 50,
+          "label": "抽奖信息",
+          "description": "参与抽奖的模块卡片，可重复添加为多个活动入口。",
+          "feature": "lottery",
+          "repeatable": true,
+          "max_instances": 0,
+          "summary_field": "title",
+          "default_config": {
+            "action_label": "查看活动",
+            "action_to": "/lottery",
+            "body": "完成答题后参与现场抽奖。",
+            "eyebrow": "现场福利",
+            "title": "抽奖信息"
+          },
+          "fields": [
+            {
+              "key": "eyebrow",
+              "label": "眉题",
+              "type": "text",
+              "group": "content",
+              "group_label": "活动文案",
+              "max_length": 120
+            },
+            {
+              "key": "title",
+              "label": "标题",
+              "type": "text",
+              "group": "content",
+              "group_label": "活动文案",
+              "max_length": 120
+            },
+            {
+              "key": "body",
+              "label": "正文",
+              "type": "textarea",
+              "group": "content",
+              "group_label": "活动文案",
+              "max_length": 1000
+            },
+            {
+              "key": "action_label",
+              "label": "按钮文案",
+              "type": "text",
+              "group": "actions",
+              "group_label": "活动入口",
+              "max_length": 120
+            },
+            {
+              "key": "action_to",
+              "label": "站内路径",
+              "type": "path",
+              "placeholder": "/lottery",
+              "group": "actions",
+              "group_label": "活动入口",
+              "max_length": 1000
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "key": "quiz",
+      "label": "答题",
+      "feature": "quiz",
+      "path": "/quiz",
+      "nav_label": "答题",
+      "nav_order": 30,
+      "footer_label": "答题",
+      "public_metric": true,
+      "feature_write_capability": "site.write",
+      "requires": [],
+      "routes": [
+        {
+          "path": "/quiz",
+          "feature": "quiz"
+        },
+        {
+          "path": "/result"
+        },
+        {
+          "path": "/api/session"
+        },
+        {
+          "path": "/api/quiz/round"
+        },
+        {
+          "path": "/api/quiz/round/abandon"
+        },
+        {
+          "path": "/api/quiz/current"
+        },
+        {
+          "path": "/api/answer"
+        },
+        {
+          "path": "/api/me"
+        },
+        {
+          "path": "/api/stats"
+        },
+        {
+          "path": "/api/identity/status"
+        },
+        {
+          "path": "/api/identity/current"
+        },
+        {
+          "path": "/api/identity/abandon"
+        }
+      ],
+      "capabilities": [
+        {
+          "key": "quiz.read",
+          "label": "题库查看",
+          "roles": [
+            "data_viewer"
+          ]
+        },
+        {
+          "key": "quiz.write",
+          "label": "题库维护",
+          "roles": []
+        },
+        {
+          "key": "quiz.operate",
+          "label": "现场控制",
+          "roles": [
+            "event_operator"
+          ]
+        },
+        {
+          "key": "scores.read",
+          "label": "成绩导出",
+          "roles": [
+            "data_viewer"
+          ]
+        }
+      ],
+      "admin_tabs": [
+        {
+          "key": "control",
+          "label": "现场控制",
+          "group": "operations",
+          "permission": "quiz.operate",
+          "order": 20
+        },
+        {
+          "key": "questions",
+          "label": "题库",
+          "group": "content",
+          "permission": "quiz.read",
+          "order": 50
+        }
+      ],
+      "admin_panels": [
+        {
+          "key": "quiz-questions",
+          "tab": "questions",
+          "label": "题库",
+          "permission": "quiz.read",
+          "order": 10
+        }
+      ],
+      "sections": [
+        {
+          "key": "quiz",
+          "version": 1,
+          "scope": "home",
+          "layout": "module-card",
+          "home_order": 40,
+          "label": "答题入口",
+          "description": "一个独立的答题模块卡片，可重复添加为多个入口。",
+          "feature": "quiz",
+          "repeatable": true,
+          "max_instances": 0,
+          "summary_field": "title",
+          "default_config": {
+            "action_label": "进入答题",
+            "action_to": "/quiz",
+            "body": "完成一轮答题，查看成绩与排名。",
+            "eyebrow": "现场挑战",
+            "title": "答题中心"
+          },
+          "fields": [
+            {
+              "key": "eyebrow",
+              "label": "眉题",
+              "type": "text",
+              "group": "content",
+              "group_label": "模块文案",
+              "max_length": 120
+            },
+            {
+              "key": "title",
+              "label": "标题",
+              "type": "text",
+              "group": "content",
+              "group_label": "模块文案",
+              "max_length": 120
+            },
+            {
+              "key": "body",
+              "label": "正文",
+              "type": "textarea",
+              "group": "content",
+              "group_label": "模块文案",
+              "max_length": 1000
+            },
+            {
+              "key": "action_label",
+              "label": "按钮文案",
+              "type": "text",
+              "group": "actions",
+              "group_label": "模块入口",
+              "max_length": 120
+            },
+            {
+              "key": "action_to",
+              "label": "站内路径",
+              "type": "path",
+              "placeholder": "/quiz",
+              "group": "actions",
+              "group_label": "模块入口",
+              "max_length": 1000
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema": 1,
+      "key": "realtime",
+      "label": "实时推送",
+      "requires": [
+        "quiz"
+      ],
+      "routes": [
+        {
+          "path": "/ws"
+        },
+        {
+          "path": "/api/admin/announce"
+        },
+        {
+          "path": "/api/admin/effect"
+        }
+      ],
+      "capabilities": [],
+      "admin_tabs": [],
+      "admin_panels": [
+        {
+          "key": "realtime-operations",
+          "tab": "control",
+          "label": "公告与特效",
+          "permission": "quiz.operate",
+          "order": 20
+        }
+      ],
+      "sections": []
+    },
+    {
+      "schema": 1,
+      "key": "screen",
+      "label": "排行榜",
+      "feature": "screen",
+      "path": "/screen",
+      "nav_label": "排行榜",
+      "nav_order": 50,
+      "footer_label": "排行榜",
+      "public_metric": true,
+      "feature_write_capability": "site.write",
+      "requires": [
+        "quiz",
+        "realtime"
+      ],
+      "routes": [
+        {
+          "path": "/screen",
+          "feature": "screen",
+          "fullscreen": true
+        },
+        {
+          "path": "/api/rank",
+          "feature": "screen"
+        }
+      ],
+      "capabilities": [],
+      "admin_tabs": [],
+      "admin_panels": [],
+      "sections": [
+        {
+          "key": "screen",
+          "version": 1,
+          "scope": "home",
+          "layout": "module-card",
+          "home_order": 45,
+          "label": "排行榜入口",
+          "description": "在现场大屏查看实时成绩与排名。",
+          "feature": "screen",
+          "repeatable": true,
+          "max_instances": 0,
+          "summary_field": "title",
+          "default_config": {
+            "action_label": "查看排行",
+            "action_to": "/screen",
+            "body": "成绩与名次实时更新，在共同时区里看见每一次进步。",
+            "eyebrow": "现场大屏",
+            "title": "实时排行"
+          },
+          "fields": [
+            {
+              "key": "eyebrow",
+              "label": "眉题",
+              "type": "text",
+              "group": "content",
+              "group_label": "模块文案",
+              "max_length": 120
+            },
+            {
+              "key": "title",
+              "label": "标题",
+              "type": "text",
+              "group": "content",
+              "group_label": "模块文案",
+              "max_length": 120
+            },
+            {
+              "key": "body",
+              "label": "正文",
+              "type": "textarea",
+              "group": "content",
+              "group_label": "模块文案",
+              "max_length": 1000
+            },
+            {
+              "key": "action_label",
+              "label": "按钮文案",
+              "type": "text",
+              "group": "actions",
+              "group_label": "模块入口",
+              "max_length": 120
+            },
+            {
+              "key": "action_to",
+              "label": "站内路径",
+              "type": "path",
+              "placeholder": "/screen",
+              "group": "actions",
+              "group_label": "模块入口",
+              "max_length": 1000
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

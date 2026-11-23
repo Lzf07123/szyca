@@ -4,8 +4,10 @@ import { useSearchParams } from 'react-router-dom'
 import { api, clearCSRFToken, csrfHeader, setCSRFToken } from '../api/client'
 import { setFavicon, useSite } from '../api/site'
 import { usePageMeta } from '../components/PageMeta'
+import { MODULE_CATALOG } from '../generated/catalog.generated'
+import { MODULE_RUNTIMES } from '../modules/registry.generated'
+import type { AdminPanelContribution, AdminRuntimeContext } from '../modules/contract'
 import AccessPanel from './admin/AccessPanel'
-import AdminLottery from './admin/AdminLottery'
 import AdminOverview, { type OverviewAction } from './admin/AdminOverview'
 import AuditPanel from './admin/AuditPanel'
 import MediaPanel from './admin/MediaPanel'
@@ -15,23 +17,6 @@ interface Bg {
   id: number
   file_path: string
   active: boolean
-}
-
-interface Qr {
-  id: number
-  title: string
-  image_url: string
-  active: boolean
-}
-
-interface Question {
-  id: number
-  content: string
-  options: string[]
-  answer: number
-  score: number
-  active: boolean
-  difficulty: string
 }
 
 interface OvResp {
@@ -58,24 +43,22 @@ interface AdminAccount {
   legacy: boolean
 }
 
-type AdminTab = 'overview' | 'control' | 'questions' | 'site' | 'lottery' | 'appearance' | 'access' | 'audit'
+type AdminTab = string
 
-const ADMIN_TABS: Array<{ key: AdminTab; label: string; permission: string }> = [
-  { key: 'overview', label: '概览', permission: 'site.read' },
-  { key: 'control', label: '现场控制', permission: 'quiz.operate' },
-  { key: 'lottery', label: '抽奖', permission: 'lottery.configure' },
-  { key: 'site', label: '站点内容', permission: 'site.read' },
-  { key: 'questions', label: '题库', permission: 'quiz.read' },
-  { key: 'appearance', label: '媒体与外观', permission: 'media.read' },
-  { key: 'access', label: '管理员', permission: 'access.manage' },
-  { key: 'audit', label: '审计', permission: 'audit.read' },
-]
+const ADMIN_TABS = [
+  { key: 'overview', label: '概览', group: 'operations', permission: 'site.read', order: 10 },
+  { key: 'site', label: '站点内容', group: 'content', permission: 'site.read', order: 40 },
+  { key: 'appearance', label: '媒体与外观', group: 'content', permission: 'media.read', order: 60 },
+  { key: 'access', label: '管理员', group: 'governance', permission: 'access.manage', order: 70 },
+  { key: 'audit', label: '审计', group: 'governance', permission: 'audit.read', order: 80 },
+  ...MODULE_CATALOG.flatMap((module) => module.admin_tabs),
+].sort((a, b) => a.order - b.order)
 
-const ADMIN_GROUPS: Array<{ label: string; key: string; tabs: AdminTab[] }> = [
-  { key: 'operations', label: '现场运营', tabs: ['overview', 'control', 'lottery'] },
-  { key: 'content', label: '内容维护', tabs: ['site', 'questions', 'appearance'] },
-  { key: 'governance', label: '系统治理', tabs: ['access', 'audit'] },
-]
+const ADMIN_GROUPS = [
+  { key: 'operations', label: '现场运营' },
+  { key: 'content', label: '内容维护' },
+  { key: 'governance', label: '系统治理' },
+] as const
 
 const roleLabel: Record<AdminAccount['role'], string> = {
   owner: '所有者',
@@ -108,37 +91,34 @@ export default function Admin() {
   const [navOpen, setNavOpen] = useState(false)
   const navToggleRef = useRef<HTMLButtonElement>(null)
   const adminContentRef = useRef<HTMLDivElement>(null)
-  const [wipe, setWipe] = useState<{ target: 'questions' | 'bgs'; step: 'ask' | 'final' } | null>(null)
+  const [wipe, setWipe] = useState<{ step: 'ask' | 'final' } | null>(null)
   const [qState, setQState] = useState<'start' | 'stop'>('stop')
-  const [qBusy, setQBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [dataErrors, setDataErrors] = useState<Record<string, string>>({})
   const [siteDirty, setSiteDirty] = useState(false)
-  const [questions, setQuestions] = useState<Question[]>([])
-  const [questionsLoading, setQuestionsLoading] = useState(true)
-  const [questionQuery, setQuestionQuery] = useState('')
-  const [questionDifficulty, setQuestionDifficulty] = useState('全部')
-  const [questionStatus, setQuestionStatus] = useState<'all' | 'active' | 'inactive'>('all')
-  const [content, setContent] = useState('')
-  const [options, setOptions] = useState('')
-  const [answerIdx, setAnswerIdx] = useState(0)
-  const [score, setScore] = useState(10)
-  const [difficulty, setDifficulty] = useState('简单')
   const [bgs, setBgs] = useState<Bg[]>([])
   const [uploading, setUploading] = useState(false)
   const [footer, setFooter] = useState({ owner: '', license: '', icp: '', icp_icon: '', police: '', police_icon: '' })
-  const [qrs, setQrs] = useState<Qr[]>([])
-  const [qrNewTitle, setQrNewTitle] = useState('')
-  const [qrTitles, setQrTitles] = useState<Record<number, string>>({})
   const [logo, setLogo] = useState('')
-  const [announcement, setAnnouncement] = useState('')
-  const [announcing, setAnnouncing] = useState(false)
   const verified = account !== null
 
   const can = useCallback((permission: string) => {
     if (!account) return false
     return account.capabilities.includes('*') || account.capabilities.includes(permission)
   }, [account])
+
+  const moduleAdminPanels = useMemo<AdminPanelContribution[]>(() => (
+    MODULE_RUNTIMES
+      .flatMap((runtime) => runtime.adminPanels ?? [])
+      .sort((a, b) => a.order - b.order)
+  ), [])
+
+  const adminContext = useMemo<AdminRuntimeContext>(() => ({
+    can,
+    notify: (message, error) => setMsg(`${error ? '✘' : '✔'} ${message}`),
+    reloadSite,
+    setQuizState: setQState,
+  }), [can, reloadSite])
 
   const selectTab = useCallback((next: AdminTab) => {
     if (tab === 'site' && next !== 'site' && siteDirty && !window.confirm('站点内容还有未保存修改。离开后这些修改将丢失，确定继续吗？')) {
@@ -324,42 +304,6 @@ export default function Admin() {
     }
   }, [verified, can, loadOverview])
 
-  const switchState = async (next: 'start' | 'stop') => {
-    if (qBusy) return
-    if (next === 'stop' && !window.confirm('结束答题后，所有尚未提交的答案将被拒绝。确定现在结束吗？')) {
-      return
-    }
-    setQBusy(true)
-    setMsg('')
-    try {
-      await api('/api/admin/quiz-state', {
-        method: 'POST',
-        body: JSON.stringify({ state: next }),
-      })
-      setQState(next)
-      setMsg(next === 'start' ? '✔ 答题已开始，参与者可进入答题' : '✔ 答题已结束，未提交答案已停止接收')
-      void loadOverview()
-    } catch (cause) {
-      setMsg(`✘ ${(cause as Error).message}`)
-    } finally {
-      setQBusy(false)
-    }
-  }
-
-  const reload = useCallback(async () => {
-    if (!can('quiz.read')) return
-    setQuestionsLoading(true)
-    try {
-      const d = await api<{ questions: Question[] }>('/api/admin/questions')
-      setQuestions(d.questions)
-      clearLoadFailure('questions')
-    } catch (cause) {
-      reportLoadFailure('questions', cause)
-    } finally {
-      setQuestionsLoading(false)
-    }
-  }, [can, clearLoadFailure, reportLoadFailure])
-
   const reloadBgs = useCallback(async () => {
     if (!can('media.read')) return
     try {
@@ -368,19 +312,6 @@ export default function Admin() {
       clearLoadFailure('backgrounds')
     } catch (cause) {
       reportLoadFailure('backgrounds', cause)
-    }
-  }, [can, clearLoadFailure, reportLoadFailure])
-
-  const reloadQrs = useCallback(async () => {
-    if (!can('site.read')) return
-    try {
-      const d = await api<{ qrcodes: Qr[] }>('/api/admin/qrcodes')
-      const list = d.qrcodes || []
-      setQrs(list)
-      setQrTitles(Object.fromEntries(list.map((q) => [q.id, q.title])))
-      clearLoadFailure('qrcodes')
-    } catch (cause) {
-      reportLoadFailure('qrcodes', cause)
     }
   }, [can, clearLoadFailure, reportLoadFailure])
 
@@ -409,13 +340,11 @@ export default function Admin() {
   const reloadAll = useCallback(async () => {
     await Promise.all([
       loadOverview(),
-      reload(),
       reloadBgs(),
       reloadFooter(),
-      reloadQrs(),
       reloadLogo(),
     ])
-  }, [loadOverview, reload, reloadBgs, reloadFooter, reloadLogo, reloadQrs])
+  }, [loadOverview, reloadBgs, reloadFooter, reloadLogo])
 
   useEffect(() => {
     if (verified) void reloadAll()
@@ -486,8 +415,18 @@ export default function Admin() {
     void reloadBgs()
   }
 
-  const toggleBg = (b: Bg) =>
-    void act(`/api/admin/backgrounds/${b.id}/active`, { active: !b.active }, b.active ? '背景已停用' : '背景已启用')
+  const toggleBg = async (background: Bg) => {
+    try {
+      await api(`/api/admin/backgrounds/${background.id}/active`, {
+        method: 'POST',
+        body: JSON.stringify({ active: !background.active }),
+      })
+      setMsg(background.active ? '✔ 背景已停用' : '✔ 背景已启用')
+      await reloadBgs()
+    } catch (cause) {
+      setMsg(`✘ ${(cause as Error).message}`)
+    }
+  }
 
   const delBg = async (b: Bg) => {
     if (!window.confirm(`确定删除背景图「${b.file_path.split('/').pop() || b.id}」？此操作不可恢复。`)) return
@@ -495,80 +434,6 @@ export default function Admin() {
       await api(`/api/admin/backgrounds/${b.id}`, { method: 'DELETE' })
       setMsg('✔ 背景已删除')
       void reloadBgs()
-    } catch (e) {
-      setMsg(`✘ ${(e as Error).message}`)
-    }
-  }
-
-  // 二维码（加入我们）：新增 / 改标题 / 换图 / 停启用 / 删除
-  const addQr = async (f: File) => {
-    const fd = new FormData()
-    fd.append('file', f)
-    fd.append('title', qrNewTitle)
-    try {
-      const res = await fetch('/api/admin/qrcodes', {
-        method: 'POST',
-        headers: csrfHeader(),
-        body: fd,
-      })
-      if (!res.ok) {
-        const b = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
-        throw new Error(b.error || `HTTP ${res.status}`)
-      }
-      setQrNewTitle('')
-      setMsg('✔ 二维码已新增并默认启用，前台 30 秒内生效')
-      void reloadQrs()
-    } catch (e) {
-      setMsg(`✘ ${(e as Error).message}`)
-    }
-  }
-
-  const saveQrTitle = async (q: Qr) => {
-    try {
-      await api(`/api/admin/qrcodes/${q.id}`, {
-        method: 'POST',
-        body: JSON.stringify({ title: qrTitles[q.id] ?? '' }),
-      })
-      setMsg('✔ 标题已保存')
-      void reloadQrs()
-    } catch (e) {
-      setMsg(`✘ ${(e as Error).message}`)
-    }
-  }
-
-  const replaceQrImage = async (q: Qr, f: File) => {
-    try {
-      const url = await uploadImage(f)
-      await api(`/api/admin/qrcodes/${q.id}`, {
-        method: 'POST',
-        body: JSON.stringify({ image_url: url }),
-      })
-      setMsg('✔ 二维码图片已更换')
-      void reloadQrs()
-    } catch (e) {
-      setMsg(`✘ ${(e as Error).message}`)
-    }
-  }
-
-  const toggleQr = async (q: Qr) => {
-    try {
-      await api(`/api/admin/qrcodes/${q.id}`, {
-        method: 'POST',
-        body: JSON.stringify({ active: !q.active }),
-      })
-      setMsg(`✔ ${q.active ? '二维码已停用' : '二维码已启用'}`)
-      void reloadQrs()
-    } catch (e) {
-      setMsg(`✘ ${(e as Error).message}`)
-    }
-  }
-
-  const delQr = async (q: Qr) => {
-    if (!window.confirm(`确定删除二维码「${q.title || `#${q.id}`}」？此操作不可恢复。`)) return
-    try {
-      await api(`/api/admin/qrcodes/${q.id}`, { method: 'DELETE' })
-      setMsg('✔ 二维码已删除')
-      void reloadQrs()
     } catch (e) {
       setMsg(`✘ ${(e as Error).message}`)
     }
@@ -586,6 +451,18 @@ export default function Admin() {
       setMsg(url ? '✔ Logo 已更新，前台刷新后生效（favicon 已同步）' : '✔ 已恢复内置 Logo 样式')
     } catch (e) {
       setMsg(`✘ ${(e as Error).message}`)
+    }
+  }
+
+  const saveFooter = async () => {
+    try {
+      await api('/api/admin/footer', {
+        method: 'POST',
+        body: JSON.stringify(footer),
+      })
+      setMsg('✔ 页脚信息已更新')
+    } catch (cause) {
+      setMsg(`✘ ${(cause as Error).message}`)
     }
   }
 
@@ -610,97 +487,19 @@ export default function Admin() {
     }
   }
 
-  // 批量导入题目 CSV
-  const importQuestions = async (f: File) => {
-    const fd = new FormData()
-    fd.append('file', f)
-    try {
-      const res = await fetch('/api/admin/questions/import', {
-        method: 'POST',
-        headers: csrfHeader(),
-        body: fd,
-      })
-      const d = await res.json().catch(() => ({ error: '导入失败' }))
-      if (!res.ok) {
-        setMsg(`✘ ${d.error || '导入失败'}`)
-        return
-      }
-      const failed = (d.failed || []) as Array<{ line: number; error: string }>
-      if (failed.length) {
-        setMsg(`✘ 导入完成：成功 ${d.imported} 题；失败 ${failed.length} 行（第 ${failed.map((x) => x.line).join('、')} 行）`)
-      } else {
-        setMsg(`✔ 导入成功：${d.imported} 题`)
-      }
-      void reload()
-    } catch (e) {
-      setMsg(`✘ ${(e as Error).message}`)
-    }
-  }
-
   const confirmWipe = async () => {
     if (!wipe) return
-    const target = wipe.target
     setWipe(null)
     try {
-      if (target === 'questions') {
-        const d = await api<{ questions_deleted: number }>('/api/admin/questions', {
-          method: 'DELETE',
-        })
-        setMsg(`✔ 已清空 ${d.questions_deleted} 道题目（排行榜与答题记录保留）`)
-        void reload()
-      } else {
-        const d = await api<{ backgrounds_deleted: number }>('/api/admin/backgrounds', {
-          method: 'DELETE',
-        })
-        setMsg(`✔ 已清空 ${d.backgrounds_deleted} 张背景图`)
-        void reloadBgs()
-      }
-    } catch (e) {
-      setMsg(`✘ ${(e as Error).message}`)
-    }
-  }
-
-  async function act(path: string, body: any, okMsg: string) {
-    try {
-      await api(path, { method: 'POST', body: JSON.stringify(body) })
-      setMsg(`✔ ${okMsg}`)
-      void reload()
-    } catch (e) {
-      setMsg(`✘ ${(e as Error).message}`)
-    }
-  }
-
-  async function broadcastAnnouncement() {
-    const content = announcement.trim()
-    if (!content || announcing) return
-    setAnnouncing(true)
-    setMsg('')
-    try {
-      await api('/api/admin/announce', {
-        method: 'POST',
-        body: JSON.stringify({ content, type: 'info' }),
+      const d = await api<{ backgrounds_deleted: number }>('/api/admin/backgrounds', {
+        method: 'DELETE',
       })
-      setAnnouncement('')
-      setMsg('✔ 公告已广播到答题页与现场大屏')
-    } catch (cause) {
-      setMsg(`✘ ${(cause as Error).message}`)
-    } finally {
-      setAnnouncing(false)
+      setMsg(`✔ 已清空 ${d.backgrounds_deleted} 张背景图`)
+      void reloadBgs()
+    } catch (e) {
+      setMsg(`✘ ${(e as Error).message}`)
     }
   }
-
-  const filteredQuestions = useMemo(() => {
-    const query = questionQuery.trim().toLocaleLowerCase('zh-CN')
-    return questions.filter((question) => {
-      if (questionDifficulty !== '全部' && question.difficulty !== questionDifficulty) return false
-      if (questionStatus === 'active' && !question.active) return false
-      if (questionStatus === 'inactive' && question.active) return false
-      return !query || question.content.toLocaleLowerCase('zh-CN').includes(query)
-    })
-  }, [questionDifficulty, questionQuery, questionStatus, questions])
-
-  const draftOptions = options.split('\n').map((option) => option.trim()).filter(Boolean)
-  const answerOption = draftOptions[answerIdx]
   const allowedTabs = ADMIN_TABS.filter((item) => can(item.permission))
   const visibleTab = allowedTabs.some((item) => item.key === tab) ? tab : allowedTabs[0]?.key
   const visibleTabMeta = ADMIN_TABS.find((item) => item.key === visibleTab)
@@ -729,7 +528,7 @@ export default function Admin() {
     quickActions.push({
       tab: 'questions',
       label: '题库维护',
-      description: questionsLoading ? '正在同步题目状态' : `${questions.filter((question) => question.active).length} / ${questions.length} 道题启用`,
+      description: '导入、新增、检索和启停题目',
       meta: '内容准备',
     })
   }
@@ -854,7 +653,7 @@ export default function Admin() {
             </div>
             <nav className="admin-nav" aria-label="后台功能">
               {ADMIN_GROUPS.map((group) => {
-                const groupTabs = allowedTabs.filter((item) => group.tabs.includes(item.key))
+                const groupTabs = allowedTabs.filter((item) => item.group === group.key)
                 if (groupTabs.length === 0) return null
                 return (
                   <div className="admin-nav-group" key={group.key}>
@@ -952,7 +751,7 @@ export default function Admin() {
       {visibleTab === 'site' && (
         <SiteEditor
           canWrite={can('site.write')}
-          canManageLottery={can('lottery.configure')}
+          can={can}
           onMessage={(message, error) => setMsg(`${error ? '✘' : '✔'} ${message}`)}
           onSaved={reloadSite}
           onDirtyChange={setSiteDirty}
@@ -965,12 +764,11 @@ export default function Admin() {
         />
       )}
 
-      {visibleTab === 'lottery' && (
-        <AdminLottery
-          onMessage={(message, error) => setMsg(`${error ? '✘' : '✔'} ${message}`)}
-          onSiteChanged={reloadSite}
-        />
-      )}
+      {visibleTab !== 'control' && moduleAdminPanels
+        .filter((panel) => panel.tab === visibleTab && can(panel.permission))
+        .map(({ key, Component }) => (
+          <Component key={key} context={adminContext} />
+        ))}
 
       {visibleTab === 'audit' && (
         <AuditPanel
@@ -978,7 +776,7 @@ export default function Admin() {
         />
       )}
 
-      {visibleTab === 'control' && (
+            {visibleTab === 'control' && (
         <div className="card">
           <div className="panel-head">
             <div>
@@ -988,133 +786,13 @@ export default function Admin() {
             </div>
           </div>
           <div className="admin-grid">
-          <div className="admin-panel">
-            <h3>答题控制</h3>
-            <p className="muted" role="status" aria-live="polite">
-              当前状态：
-              <b className={qState === 'start' ? 'state-live' : 'state-idle'}>
-                {qState === 'start' ? '答题进行中' : '答题未开始'}
-              </b>
-            </p>
-            <button
-              className="btn btn-accent"
-              type="button"
-              disabled={qState === 'start' || qBusy}
-              onClick={() => void switchState('start')}
-            >
-              {qBusy ? '处理中…' : '开始答题'}
-            </button>
-            <button
-              className="btn btn-danger-outline"
-              type="button"
-              disabled={qState === 'stop' || qBusy}
-              onClick={() => void switchState('stop')}
-            >
-              结束答题
-            </button>
-          </div>
-
-          <div className="admin-panel">
-            <h3>特效</h3>
-            <button className="btn" onClick={() => void act('/api/admin/effect', { kind: 'confetti' }, '已触发彩蛋特效')}>
-              全屏庆祝特效
-            </button>
-          </div>
-
-          <div className="admin-panel">
-            <h3>公告</h3>
-            <p className="muted">公告会同时推送到答题页与现场大屏，最多 200 字。</p>
-            <label className="field">
-              公告内容
-              <textarea
-                rows={3}
-                maxLength={200}
-                value={announcement}
-                placeholder="如：本轮答题将在 5 分钟后结束，请抓紧提交。"
-                onChange={(event) => setAnnouncement(event.target.value)}
-              />
-            </label>
-            <p className="field-hint">{announcement.length} / 200</p>
-            <button
-              className="btn"
-              type="button"
-              disabled={!announcement.trim() || announcing}
-              onClick={() => void broadcastAnnouncement()}
-            >
-              {announcing ? '正在广播…' : '广播公告'}
-            </button>
-          </div>
-
-          {can('site.write') && <div className="admin-panel">
-            <h3>加入我们 · 二维码</h3>
-            <p className="muted">标题展示在二维码下方；启用中的二维码会全部出现在「加入我们」页。</p>
-            <label className="field">
-              新增标题（可留空，最多 30 字）
-              <input
-                value={qrNewTitle}
-                maxLength={30}
-                placeholder="如：招新群① / QQ群 / 公众号"
-                onChange={(e) => setQrNewTitle(e.target.value)}
-              />
-            </label>
-            <label className="field">
-              上传图片（新增一条，默认启用）
-              <input
-                type="file"
-                accept="image/*"
-                disabled={!can('site.write')}
-                onChange={(e) => {
-                  const f = e.target.files && e.target.files[0]
-                  e.target.value = ''
-                  if (f) void addQr(f)
-                }}
-              />
-            </label>
-            <ul className="qlist">
-              {qrs.map((q) => (
-                <li key={q.id}>
-                  <span className="qr-row">
-                    <img className="thumb" src={q.image_url} alt="" />
-                    <input
-                      className="qr-title-input"
-                      value={qrTitles[q.id] ?? ''}
-                      maxLength={30}
-                      placeholder="标题（可留空）"
-                      onChange={(e) => setQrTitles({ ...qrTitles, [q.id]: e.target.value })}
-                    />
-                  </span>
-                  <span className="qr-actions">
-                    <button className="mini-btn" onClick={() => void saveQrTitle(q)}>
-                      保存标题
-                    </button>
-                    <label className="mini-btn">
-                      换图
-                      <input
-                        type="file"
-                        accept="image/*"
-                        hidden
-                        onChange={(e) => {
-                          const f = e.target.files && e.target.files[0]
-                          e.target.value = ''
-                          if (f) void replaceQrImage(q, f)
-                        }}
-                      />
-                    </label>
-                    <button className="mini-btn" onClick={() => void toggleQr(q)}>
-                      {q.active ? '停用' : '启用'}
-                    </button>
-                    <button className="mini-btn danger" onClick={() => void delQr(q)}>
-                      删除
-                    </button>
-                  </span>
-                </li>
+            {moduleAdminPanels
+              .filter((panel) => panel.tab === 'control' && can(panel.permission))
+              .map(({ key, Component }) => (
+                <Component key={key} context={adminContext} />
               ))}
-              {qrs.length === 0 && <li className="muted">暂无二维码，上传后「加入我们」页即可扫码</li>}
-            </ul>
-          </div>}
-
-      </div>
-      </div>
+          </div>
+        </div>
       )}
 
       {visibleTab === 'appearance' && (
@@ -1157,7 +835,7 @@ export default function Admin() {
             <div className="qbank-head">
               <h3>首页背景轮播</h3>
               {bgs.length > 0 && can('media.write') && (
-                <button className="mini-btn danger" onClick={() => setWipe({ target: 'bgs', step: 'ask' })}>
+                <button className="mini-btn danger" onClick={() => setWipe({ step: 'ask' })}>
                   一键清空
                 </button>
               )}
@@ -1273,7 +951,7 @@ export default function Admin() {
                 {footer.police_icon && <img className="thumb" src={footer.police_icon} alt="公安图标预览" />}
               </label>
             </div>
-            {can('site.write') && <button className="btn btn-accent" onClick={() => void act('/api/admin/footer', footer, '页脚信息已更新')}>
+            {can('site.write') && <button className="btn btn-accent" onClick={() => void saveFooter()}>
               保存页脚
             </button>}
           </div>
@@ -1281,171 +959,6 @@ export default function Admin() {
             canWrite={can('media.write')}
             onMessage={(message, error) => setMsg(`${error ? '✘' : '✔'} ${message}`)}
           />
-        </div>
-      </div>
-      )}
-
-      {visibleTab === 'questions' && (
-      <div className="card">
-        <div className="qbank-head">
-          <div>
-            <h3>题库（{questions.length}）</h3>
-            <p className="muted">启用中 {questions.filter((question) => question.active).length} 题 · 当前筛选 {filteredQuestions.length} 题</p>
-          </div>
-          {can('quiz.write') && (
-            <button className="mini-btn danger" type="button" onClick={() => setWipe({ target: 'questions', step: 'ask' })}>
-              一键清空题库
-            </button>
-          )}
-        </div>
-        <div className="admin-grid">
-          {can('quiz.write') && <div className="admin-panel question-import-panel">
-            <h3>批量导入题目</h3>
-            <p className="muted">
-              CSV 列：题目, 选项A~F, 正确答案(A-F), 难度, 分值。题目以「示例」开头的行自动跳过。
-            </p>
-            <div className="field-actions">
-              <button className="btn" type="button" onClick={() => void download('/api/admin/questions/template', 'questions-template.csv')}>
-                下载模板
-              </button>
-              <label className="field">
-                <input
-                  type="file"
-                  accept=".csv,text/csv"
-                  onChange={(e) => {
-                    const f = e.target.files && e.target.files[0]
-                    if (f) void importQuestions(f)
-                  }}
-                />
-              </label>
-            </div>
-          </div>}
-
-          {can('quiz.write') && <div className="admin-panel">
-            <h3>新增题目</h3>
-            <label className="field">
-              题目
-              <input value={content} onChange={(e) => setContent(e.target.value)} />
-            </label>
-            <label className="field">
-              选项（每行一个）
-              <textarea
-                rows={4}
-                value={options}
-                onChange={(e) => {
-                  const nextOptions = e.target.value.split('\n').map((option) => option.trim()).filter(Boolean)
-                  setOptions(e.target.value)
-                  if (answerIdx >= nextOptions.length) setAnswerIdx(Math.max(0, nextOptions.length - 1))
-                }}
-              />
-            </label>
-            <label className="field">
-              正确答案
-              <select
-                value={answerIdx}
-                disabled={draftOptions.length === 0}
-                onChange={(e) => setAnswerIdx(Number(e.target.value))}
-              >
-                {draftOptions.length === 0 && <option value={0}>请先填写选项</option>}
-                {draftOptions.map((option, index) => (
-                  <option key={`${index}-${option}`} value={index}>
-                    {String.fromCharCode(65 + index)}. {option}
-                  </option>
-                ))}
-              </select>
-              <span className="field-hint">
-                {answerOption ? `当前正确项：${String.fromCharCode(65 + answerIdx)}. ${answerOption}` : '填写选项后可直接选择正确答案'}
-              </span>
-            </label>
-            <label className="field">
-              分值
-              <input type="number" min={1} value={score} onChange={(e) => setScore(Number(e.target.value))} />
-            </label>
-            <label className="field">
-              难度
-              <select value={difficulty} onChange={(e) => setDifficulty(e.target.value)}>
-                {['容易', '简单', '困难'].map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
-            </label>
-            <button
-              className="btn btn-primary"
-              type="button"
-              disabled={!content.trim() || draftOptions.length < 2 || answerIdx >= draftOptions.length || score < 1}
-              onClick={() =>
-                void act(
-                  '/api/admin/questions',
-                  { content, options: draftOptions, answer: answerIdx, score, difficulty },
-                  '题目已添加',
-                )
-              }
-            >
-              添加题目
-            </button>
-          </div>}
-
-          <div className="admin-panel">
-            <h3>题目列表</h3>
-            <div className="question-filters">
-              <label className="field">
-                搜索题目
-                <input
-                  type="search"
-                  value={questionQuery}
-                  placeholder="输入题目关键字"
-                  onChange={(event) => setQuestionQuery(event.target.value)}
-                />
-              </label>
-              <label className="field">
-                难度
-                <select value={questionDifficulty} onChange={(event) => setQuestionDifficulty(event.target.value)}>
-                  {['全部', '容易', '简单', '困难'].map((value) => (
-                    <option key={value} value={value}>{value}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                状态
-                <select
-                  value={questionStatus}
-                  onChange={(event) => setQuestionStatus(event.target.value as typeof questionStatus)}
-                >
-                  <option value="all">全部</option>
-                  <option value="active">启用中</option>
-                  <option value="inactive">已停用</option>
-                </select>
-              </label>
-            </div>
-            {questionsLoading ? (
-              <div className="admin-loading" role="status">正在读取题库…</div>
-            ) : (
-              <ul className="qlist">
-                {filteredQuestions.map((q) => (
-                  <li key={q.id} title={q.content}>
-                    <span className={q.active ? '' : 'muted'}>
-                      <i className={`qdiff d-${q.difficulty}`}>{q.difficulty}</i> #{q.id} {q.content.slice(0, 16)}
-                      {q.content.length > 16 ? '…' : ''}
-                    </span>
-                    {can('quiz.write') && (
-                      <button
-                        className="mini-btn"
-                        type="button"
-                        onClick={() => void act(`/api/admin/questions/${q.id}/active`, { active: !q.active }, q.active ? '已停用' : '已启用')}
-                      >
-                        {q.active ? '停用' : '启用'}
-                      </button>
-                    )}
-                  </li>
-                ))}
-                {filteredQuestions.length === 0 && (
-                  <li className="muted">
-                    {questions.length === 0 ? '题库为空，请先导入或新增题目。' : '没有符合当前筛选条件的题目。'}
-                  </li>
-                )}
-              </ul>
-            )}
-          </div>
         </div>
       </div>
       )}
@@ -1478,20 +991,10 @@ export default function Admin() {
           >
             {wipe.step === 'ask' ? (
               <>
-                <h3 id="admin-confirm-title">{wipe.target === 'questions' ? '清空全部题库？' : '清空全部背景图？'}</h3>
+                <h3 id="admin-confirm-title">清空全部背景图？</h3>
                 <ul className="side-effects">
-                  {wipe.target === 'questions' ? (
-                    <>
-                      <li>将删除全部 <b>{questions.length} 道题目</b></li>
-                      <li><b>答题记录与排行榜完整保留</b>，已答成绩不受影响</li>
-                      <li>清空后<b>不会重新播种</b>内置示例题，请随后导入正式题库</li>
-                    </>
-                  ) : (
-                    <>
-                      <li>将删除全部 <b>{bgs.length} 张背景图</b>（含上传文件）</li>
-                      <li>首页将回退为<b>粒子动画</b>背景</li>
-                    </>
-                  )}
+                  <li>将删除全部 <b>{bgs.length} 张背景图</b>（含上传文件）</li>
+                  <li>首页将回退为<b>粒子动画</b>背景</li>
                   <li>此操作<b>不可恢复</b></li>
                 </ul>
                 <div className="modal-actions">
@@ -1502,9 +1005,7 @@ export default function Admin() {
             ) : (
               <>
                 <h3 id="admin-confirm-title">最后确认</h3>
-                <p className="muted">
-                  再次确认：确定清空全部{wipe.target === 'questions' ? '题目' : '背景图'}吗？此操作不可恢复。
-                </p>
+                <p className="muted">再次确认：确定清空全部背景图吗？此操作不可恢复。</p>
                 <div className="modal-actions">
                   <button className="btn" type="button" autoFocus onClick={() => setWipe({ ...wipe, step: 'ask' })}>返回</button>
                   <button className="btn btn-danger" type="button" onClick={() => void confirmWipe()}>确认清空</button>

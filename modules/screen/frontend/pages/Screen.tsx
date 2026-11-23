@@ -1,0 +1,154 @@
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { api, getToken } from '@core/api/client'
+import { useLogoURL } from '@core/api/site'
+import { usePageMeta } from '@core/components/PageMeta'
+import { QuizSocket, wsURL } from '@core/ws/socket'
+
+interface Entry {
+  user_id: string
+  nickname: string
+  correct: number
+  elapsed_ms: number
+  score: number
+}
+
+interface Stats {
+  participants: number
+  attempts: number
+  online: number
+}
+
+interface MyRank {
+  nickname: string
+  rank: number
+  total: number
+}
+
+export default function Screen() {
+  usePageMeta('实时排行榜 · 计算机协会', '计算机协会招新答题现场实时排行榜。')
+  const logoURL = useLogoURL()
+  const [top, setTop] = useState<Entry[]>([])
+  const [stats, setStats] = useState<Stats>({ participants: 0, attempts: 0, online: 0 })
+  const [connection, setConnection] = useState<'connecting' | 'online' | 'offline'>('connecting')
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+  const [effect, setEffect] = useState('')
+  const [announce, setAnnounce] = useState('')
+  const [state, setState] = useState('stop')
+  const [myRank, setMyRank] = useState<MyRank | null>(null)
+
+  useEffect(() => {
+    const syncStats = () => {
+      void api<Stats>('/api/stats')
+        .then(setStats)
+        .catch(() => undefined)
+      // 答题状态 5s 同步（配合 WS 事件，徽章及时准确）
+      void api<{ quiz_state: string }>('/api/config')
+        .then((c) => setState(c.quiz_state === 'start' ? 'start' : 'stop'))
+        .catch(() => undefined)
+      // 本机若有答题身份，头部展示自己的全量排名
+      if (getToken()) {
+        void api<MyRank>('/api/me')
+          .then(setMyRank)
+          .catch(() => undefined)
+      }
+    }
+    void syncStats()
+    const st = window.setInterval(syncStats, 5000)
+
+    const sock = new QuizSocket(
+      wsURL(),
+      (msg) => {
+        if (msg.type === 'rank_update') {
+          setTop((msg.data || []) as Entry[])
+          setLastUpdate(new Date())
+        }
+        if (msg.type === 'effect') {
+          setEffect((msg.data && msg.data.kind) || 'confetti')
+          window.setTimeout(() => setEffect(''), 3000)
+        }
+        if (msg.type === 'announcement') {
+          setAnnounce((msg.data && msg.data.content) || '')
+          window.setTimeout(() => setAnnounce(''), 5000)
+        }
+        if (msg.type === 'quiz_state') setState((msg.data && msg.data.state) || 'stop')
+      },
+      (ok) => {
+        setConnection(ok ? 'online' : 'offline')
+        if (ok) void syncStats()
+      },
+    )
+    sock.connect()
+    // 兜底轮询，防断流
+    const t = window.setInterval(() => {
+      void api<{ entries: Entry[] }>('/api/rank?top=99')
+        .then((d) => {
+          setTop(d.entries)
+          setLastUpdate(new Date())
+        })
+        .catch(() => undefined)
+    }, 10000)
+    return () => {
+      clearInterval(st)
+      clearInterval(t)
+      sock.close()
+    }
+  }, [])
+
+  return (
+    <section className={`screen${effect ? ' fx-' + effect : ''}`}>
+      <header className="screen-head">
+        <div className="screen-title">
+          <Link className="screen-home" to="/">← 返回首页</Link>
+          <h1>
+            {logoURL && <img className="screen-logo" src={logoURL} alt="" />}
+            计算机协会 · 招新答题
+          </h1>
+        </div>
+        <div className="screen-status">
+          <span className={`dot${connection === 'online' ? ' on' : ''}`} />
+          {connection === 'online' ? '实时连接' : connection === 'offline' ? '自动重连中' : '连接中…'}
+          <span className={`badge${state === 'start' ? ' live' : ''}`}>
+            {state === 'start' ? '答题进行中' : '等待开始'}
+          </span>
+        </div>
+      </header>
+
+      {connection === 'offline' && (
+        <div className="screen-sync-alert" role="status" aria-live="polite">
+          实时连接中断，榜单每 10 秒尝试恢复
+          {lastUpdate ? ` · 最后更新 ${lastUpdate.toLocaleTimeString('zh-CN', { hour12: false })}` : ''}
+        </div>
+      )}
+
+      <div className="screen-stats">
+        {myRank && (
+          <span className="screen-me">
+            我的排名 <b>{myRank.rank > 0 ? myRank.rank : '-'}</b> / 共 {myRank.total} 人
+            <i className="screen-me-nick">{myRank.nickname}</i>
+          </span>
+        )}
+        <span>参与答题 <b>{stats.participants}</b> 人</span>
+        <span>累计答题 <b>{stats.attempts}</b> 次</span>
+        <span>在线连接 <b>{stats.online}</b></span>
+      </div>
+
+      {announce && <div className="announce-banner"><span>{announce}</span></div>}
+
+      <ol className="screen-rank">
+        {top.map((e, i) => (
+          <li key={e.user_id} className={`srow${i < 3 ? ` top${i + 1}` : ''}`}>
+            <span className="srank">{i + 1}</span>
+            <span className="sname" title={e.nickname}>{e.nickname}</span>
+            <span className="sdetail">
+              {e.score} 分 · {e.correct} 题 · {(e.elapsed_ms / 1000).toFixed(0)}s
+            </span>
+          </li>
+        ))}
+        {top.length === 0 && <li className="muted center">等待第一批勇士上榜…</li>}
+      </ol>
+
+      {effect && <div className="effect-overlay">🎉</div>}
+    </section>
+  )
+}

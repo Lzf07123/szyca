@@ -16,7 +16,7 @@ NETWORK = "szyca-legacy-test-net"
 PG = "szyca-legacy-pg"
 REDIS = "szyca-legacy-redis"
 APP = "szyca-legacy-app"
-BASELINE = ROOT / "backend/internal/platform/migrate/migrations/0001_quiz_baseline.sql"
+BASELINE = ROOT / "backend/core/platform/migrate/migrations/0001_quiz_baseline.sql"
 
 
 def run(args: list[str], **kwargs) -> str:
@@ -232,7 +232,7 @@ def main() -> None:
         assert first["round_questions"] == before["round_questions"] == 20, (before, first)
         assert first["qrcodes"] == before["qrcodes"] == 1, (before, first)
         assert first["backgrounds"] == before["backgrounds"] == 1, (before, first)
-        assert first["section_count"] == 7
+        assert first["section_count"] == 8
         assert first["gallery_images"] == 0
         assert first["admin_count"] >= 1
         versions = psql("SELECT version FROM schema_migrations ORDER BY version").stdout.splitlines()
@@ -242,6 +242,7 @@ def main() -> None:
             "0003_lottery.sql",
             "0004_section_plugins.sql",
             "0005_gallery.sql",
+            "202611240001_screen_section.sql",
         ], versions
         assert psql(
             "SELECT count(*) FROM information_schema.columns "
@@ -275,7 +276,7 @@ def main() -> None:
         assert versions_after == versions
 
         print(
-            "legacy migration ok: pre-seeded data preserved, 5 migrations recorded once, "
+            "legacy migration ok: pre-seeded data preserved, 6 migrations recorded once, "
             "failed transaction rolled back, restart idempotent"
         )
     finally:

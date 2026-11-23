@@ -17,6 +17,7 @@ import {
   supportsSectionPlugin,
 } from '../../site-sections/registry'
 import { moduleForFeature } from '../../modules/registry'
+import { featureWriteCapability } from '../../generated/catalog.generated'
 
 type SectionStatus = 'draft' | 'published' | 'archived'
 
@@ -34,7 +35,7 @@ interface ManagedSection {
 
 interface Props {
   canWrite: boolean
-  canManageLottery: boolean
+  can: (permission: string) => boolean
   onMessage: (message: string, error?: boolean) => void
   onSaved: () => Promise<void>
   onDirtyChange: (dirty: boolean) => void
@@ -341,7 +342,7 @@ function SectionFieldsEditor({
 
 export default function SiteEditor({
   canWrite,
-  canManageLottery,
+  can,
   onMessage,
   onSaved,
   onDirtyChange,
@@ -369,6 +370,9 @@ export default function SiteEditor({
     [deletedSections, savedSections, sections],
   )
   const dirty = featuresDirty || sectionsDirty
+  const canEditFeature = (featureKey: string) => (
+    canWrite && can(featureWriteCapability(featureKey) ?? 'site.write')
+  )
   const pluginManifests = useMemo(
     () => new Map(sectionPlugins.map((plugin) => [`${plugin.key}@${plugin.version}`, plugin])),
     [sectionPlugins],
@@ -558,9 +562,7 @@ export default function SiteEditor({
 
   const saveFeatures = async () => {
     if (!canWrite || savingFeatures || !featuresDirty) return
-    const editable = features.filter((feature) => (
-      feature.key !== 'lottery' || canManageLottery
-    ))
+    const editable = features.filter((feature) => canEditFeature(feature.key))
     setSavingFeatures(true)
     try {
       await api('/api/admin/platform/features', {
@@ -616,7 +618,7 @@ export default function SiteEditor({
         </div>
         <div className="feature-switch-grid">
           {features.map((feature) => {
-            const editable = canWrite && (feature.key !== 'lottery' || canManageLottery)
+            const editable = canEditFeature(feature.key)
             return (
               <label className="feature-switch" key={feature.key}>
                 <span>

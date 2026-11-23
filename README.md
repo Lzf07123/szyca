@@ -8,7 +8,9 @@
 >
 > Section 插件开发契约见 [docs/Section插件开发.md](docs/Section插件开发.md)
 >
-> 功能模块开发契约见 [docs/功能模块开发.md](docs/功能模块开发.md)
+> 权威模块开发契约见 [docs/模块开发契约.md](docs/模块开发契约.md)
+>
+> 生成器、运行时和注册表实现见 [docs/模块系统实现.md](docs/模块系统实现.md)
 >
 > 后台操作见 [docs/后台操作手册.md](docs/后台操作手册.md)，部署/回滚见 [docs/部署与回滚.md](docs/部署与回滚.md)
 >
@@ -18,7 +20,7 @@
 
 - **数据驱动官网**：单次 `/api/site` 获取品牌、导航、页脚、模块开关、Section 插件实例、背景和二维码；同一类型可重复编排，公开站共享 56px 网格、90 节点 Canvas 星座、终端语言和模块卡片布局
 - **活动影像**：独立图集数据与专用上传/说明/排序/删除接口，文件接入媒体引用与删除保护，公开端随 `/api/site` 一次返回
-- **功能模块边界**：站壳只负责布局、首页、后台与模块组合；答题、加入、抽奖、排行榜通过前后端模块注册表接入，公开导航、路由、API 和懒加载页面由模块 Manifest 贡献
+- **功能模块边界**：站壳只负责布局、首页、后台与模块组合；六个业务模块拥有自己的页面、handler、service/repository、迁移和权限，生成器只负责编译期注册
 - **在线答题**：一人一设备一身份；难度自选（全部/容易/简单/困难）；每轮题目顺序持久化；只能按当前题序每题提交一次；正确选项不下发前端；服务端按截止时间校验，网络抖动可配置宽限
 - **排行榜**：按最佳一轮总分优先、同分按用时排序；全量排名（未答题也排）、大屏最多显示 99 名、头部显示「我的排名」、参与/答题/在线连接统计
 - **身份规则**：设备指纹去重（同设备换昵称需先放弃）；放弃身份需二次确认并告知副作用；放弃后昵称永久封存、榜单留痕；可多轮答题取历史最佳成绩
@@ -144,8 +146,9 @@ scripts/publish_image.sh --push
 ## 目录结构
 
 ```
-backend/              Go（appmodule/site/access/audit/media/lottery/quiz/platform/store/ws）
-frontend/             React 18 + Vite（站壳、Section 插件、功能模块、RBAC 后台）
+backend/              Go 共享内核（contract/site/access/audit/media/platform/store/httpapi）
+modules/              六个业务模块的 Manifest、后端服务、前端页面和测试
+frontend/             React 18 + Vite 站壳、共享组件与 Section 运行时
 deploy/               单容器 Dockerfile + Compose + Nginx/Supervisor
 design-system/szyca/  BRAND + MASTER + 页面规则 + 项目自有深空模板
 docs/                 架构、API、后台、部署回滚与验收证据
@@ -220,18 +223,18 @@ python3 scripts/site_perf_test.py
 覆盖题目脱敏、题序、幂等、服务端超时、排行榜/导出、并发注册、WS Origin、管理员登录限流、RBAC、CSRF、审计、站点 ETag/模块开关、媒体引用、抽奖资格、同用户并发、库存和领取。后端单测：
 
 ```bash
-docker run --rm -v "$PWD/backend:/src" -w /src golang:1.22-alpine go test ./...
+docker run --rm -v "$PWD:/src" -w /src golang:1.22-alpine go test ./...
 ```
 
 浏览器、无障碍、弱网降级与六档视口：
 
 ```bash
-docker run --rm -v "$PWD/tests/browser:/work" -w /work \
+docker run --rm -v "$PWD:/workspace" -w /workspace/tests/browser \
   mcr.microsoft.com/playwright:v1.56.0-noble npm ci --no-audit --no-fund
 docker run --rm --add-host=host.docker.internal:host-gateway \
-  -v "$PWD/tests/browser:/work" \
+  -v "$PWD:/workspace" \
   -v "$PWD/artifacts/browser:/artifacts/browser" \
-  -w /work \
+  -w /workspace/tests/browser \
   -e BASE_URL=http://host.docker.internal:8091 \
   -e ADMIN_PASSWORD=integrity-test \
   mcr.microsoft.com/playwright:v1.56.0-noble node acceptance.mjs
@@ -260,7 +263,8 @@ TEST_IMAGE=szyca:release-test python3 scripts/secure_cookie_test.py
 
 ## 数据库迁移
 
-迁移文件位于 `backend/internal/platform/migrate/migrations/`。应用启动时：
+共享兼容迁移位于 `backend/core/platform/migrate/migrations/`；模块迁移位于
+`modules/<module-name>/backend/migrations/`。应用启动时：
 
 1. 获取 PostgreSQL advisory lock；
 2. 校验 `schema_migrations` 中已应用版本的 SHA-256；
@@ -268,6 +272,15 @@ TEST_IMAGE=szyca:release-test python3 scripts/secure_cookie_test.py
 4. 失败时回滚该版本并终止启动，不留下半迁移状态。
 
 旧库升级会先执行幂等的 `0001_quiz_baseline.sql`，保留用户、题目、作答、轮次、二维码、背景、页脚和 Logo 数据。
+
+模块清单变更后重新生成注册表并检查漂移：
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src golang:1.22-alpine \
+  go run ./cmd/modulegen --write
+docker run --rm -v "$PWD:/src" -w /src golang:1.22-alpine sh -c \
+  'go run ./cmd/modulegen --check'
+```
 
 ## License
 

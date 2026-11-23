@@ -3,25 +3,21 @@ import { api } from '../api/client'
 import { useSite, type HomeSection } from '../api/site'
 import CustomCursor from '../components/CustomCursor'
 import PageMeta from '../components/PageMeta'
-import { enabledPublicMetricCount } from '../modules/registry'
 import type { SectionFrontendPlugin, SectionRenderContext } from '../site-sections/contract'
-import { RankModuleCard } from '../site-sections/plugins'
 import { getSectionPlugin } from '../site-sections/registry'
 
 interface GroupedCard {
   key: string
-  section?: HomeSection
-  Renderer?: SectionFrontendPlugin['Renderer']
+  section: HomeSection
+  Renderer: SectionFrontendPlugin['Renderer']
 }
 
 function ModuleSectionGroup({
   sections,
   makeContext,
-  featureEnabled,
 }: {
   sections: HomeSection[]
   makeContext: (section: HomeSection, ordinal?: number) => SectionRenderContext
-  featureEnabled: (key: string) => boolean
 }) {
   const cards: GroupedCard[] = []
   for (const section of sections) {
@@ -30,14 +26,6 @@ function ModuleSectionGroup({
     cards.push({ key: `section-${section.id}`, section, Renderer: plugin.Renderer })
   }
   if (cards.length === 0) return null
-
-  if (featureEnabled('screen')) {
-    const lastQuiz = cards.reduce(
-      (index, card, current) => card.section?.kind === 'quiz' ? current : index,
-      -1,
-    )
-    cards.splice(lastQuiz + 1, 0, { key: 'screen-module' })
-  }
 
   return (
     <section className="modules-section" aria-labelledby="modules-title">
@@ -51,11 +39,7 @@ function ModuleSectionGroup({
       <div className="module-grid">
         {cards.map((card, index) => {
           const ordinal = index + 1
-          if (!card.section) {
-            return <RankModuleCard key={card.key} number={ordinal} featureEnabled={featureEnabled} />
-          }
           const Renderer = card.Renderer
-          if (!Renderer) return null
           return (
             <Renderer
               key={card.key}
@@ -82,7 +66,7 @@ export default function Home() {
   ))
   const firstModuleSectionID = moduleSections[0]?.id
   const backgrounds = site.backgrounds.map((background) => background.path)
-  const moduleCount = enabledPublicMetricCount(featureEnabled)
+  const moduleCount = moduleSections.length
 
   useEffect(() => {
     let alive = true
@@ -185,7 +169,6 @@ export default function Home() {
                 key={`modules-${section.id}`}
                 sections={moduleSections}
                 makeContext={makeContext}
-                featureEnabled={featureEnabled}
               />
             )
           }

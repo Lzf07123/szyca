@@ -1,8 +1,9 @@
 import type { HomeSection, SiteData } from './api/site'
+import { MODULE_CATALOG } from './generated/catalog.generated'
 
 // Brand copy and the static fallback live in one place. Runtime values returned
 // by /api/site override these defaults without requiring a rebuild.
-const fallbackSections: HomeSection[] = [
+const fallbackCoreSections: HomeSection[] = [
   {
     id: 1,
     kind: 'hero',
@@ -50,37 +51,33 @@ const fallbackSections: HomeSection[] = [
       ],
     },
   },
-  {
-    id: 4,
-    kind: 'quiz',
-    plugin_version: 1,
-    enabled: true,
-    sort: 40,
-    status: 'published',
-    config: {
-      eyebrow: '现场挑战',
-      title: '招新答题',
-      body: '选择难度，完成一轮答题，实时查看你的成绩与排名。',
-      action_label: '进入答题',
-      action_to: '/quiz',
-    },
-  },
-  {
-    id: 5,
-    kind: 'join',
-    plugin_version: 1,
-    enabled: true,
-    sort: 60,
-    status: 'published',
-    config: {
-      eyebrow: '保持联系',
-      title: '加入我们',
-      body: '扫码加入招新群，不错过下一场活动。',
-      action_label: '查看群二维码',
-      action_to: '/join',
-    },
-  },
 ]
+
+const fallbackModuleSections: HomeSection[] = MODULE_CATALOG
+  .flatMap((module) => module.sections)
+  .map((raw, index) => {
+    const section = raw as {
+      key: string
+      version: number
+      home_order?: number
+      default_config?: HomeSection['config']
+    }
+    return {
+      id: 100 + index,
+      kind: section.key,
+      plugin_version: section.version,
+      enabled: true,
+      sort: section.home_order ?? 100 + index,
+      status: 'published',
+      config: section.default_config ?? {},
+    }
+  })
+  .sort((a, b) => a.sort - b.sort || a.id - b.id)
+
+const fallbackSections: HomeSection[] = [
+  ...fallbackCoreSections,
+  ...fallbackModuleSections,
+].sort((a, b) => a.sort - b.sort || a.id - b.id)
 
 export const FALLBACK_SITE: SiteData = {
   brand: {
@@ -92,9 +89,10 @@ export const FALLBACK_SITE: SiteData = {
   },
   nav: [
     { label: '首页', to: '/' },
-    { label: '加入我们', to: '/join' },
-    { label: '答题', to: '/quiz' },
-    { label: '排行榜', to: '/screen' },
+    ...MODULE_CATALOG
+      .filter((module) => module.nav_label && module.path)
+      .sort((a, b) => (a.nav_order ?? 0) - (b.nav_order ?? 0))
+      .map((module) => ({ label: module.nav_label!, to: module.path! })),
   ],
   footer: {
     owner: '计算机协会 · 汕头职业技术学院',
@@ -105,17 +103,19 @@ export const FALLBACK_SITE: SiteData = {
     police_icon: '',
     links: [
       { label: '关于协会', href: '/#about' },
-      { label: '加入我们', href: '/join' },
-      { label: '答题', href: '/quiz' },
-      { label: '排行榜', href: '/screen' },
+      ...MODULE_CATALOG
+        .filter((module) => module.footer_label && module.path)
+        .sort((a, b) => (a.nav_order ?? 0) - (b.nav_order ?? 0))
+        .map((module) => ({ label: module.footer_label!, href: module.path! })),
     ],
   },
-  features: [
-    { key: 'quiz', enabled: true, config: {} },
-    { key: 'lottery', enabled: false, config: {} },
-    { key: 'join', enabled: true, config: {} },
-    { key: 'screen', enabled: true, config: {} },
-  ],
+  features: MODULE_CATALOG
+    .filter((module) => module.feature)
+    .map((module) => ({
+      key: module.feature!,
+      enabled: module.feature !== 'lottery',
+      config: {},
+    })),
   sections: fallbackSections,
   backgrounds: [],
   qrcodes: [],
