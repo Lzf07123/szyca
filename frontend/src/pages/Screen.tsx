@@ -30,7 +30,8 @@ export default function Screen() {
   const logoURL = useLogoURL()
   const [top, setTop] = useState<Entry[]>([])
   const [stats, setStats] = useState<Stats>({ participants: 0, attempts: 0, online: 0 })
-  const [connected, setConnected] = useState(false)
+  const [connection, setConnection] = useState<'connecting' | 'online' | 'offline'>('connecting')
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [effect, setEffect] = useState('')
   const [announce, setAnnounce] = useState('')
   const [state, setState] = useState('stop')
@@ -58,7 +59,10 @@ export default function Screen() {
     const sock = new QuizSocket(
       wsURL(),
       (msg) => {
-        if (msg.type === 'rank_update') setTop((msg.data || []) as Entry[])
+        if (msg.type === 'rank_update') {
+          setTop((msg.data || []) as Entry[])
+          setLastUpdate(new Date())
+        }
         if (msg.type === 'effect') {
           setEffect((msg.data && msg.data.kind) || 'confetti')
           window.setTimeout(() => setEffect(''), 3000)
@@ -70,7 +74,7 @@ export default function Screen() {
         if (msg.type === 'quiz_state') setState((msg.data && msg.data.state) || 'stop')
       },
       (ok) => {
-        setConnected(ok)
+        setConnection(ok ? 'online' : 'offline')
         if (ok) void syncStats()
       },
     )
@@ -78,7 +82,10 @@ export default function Screen() {
     // 兜底轮询，防断流
     const t = window.setInterval(() => {
       void api<{ entries: Entry[] }>('/api/rank?top=99')
-        .then((d) => setTop(d.entries))
+        .then((d) => {
+          setTop(d.entries)
+          setLastUpdate(new Date())
+        })
         .catch(() => undefined)
     }, 10000)
     return () => {
@@ -99,13 +106,20 @@ export default function Screen() {
           </h1>
         </div>
         <div className="screen-status">
-          <span className={`dot${connected ? ' on' : ''}`} />
-          {connected ? '实时连接' : '连接中…'}
+          <span className={`dot${connection === 'online' ? ' on' : ''}`} />
+          {connection === 'online' ? '实时连接' : connection === 'offline' ? '自动重连中' : '连接中…'}
           <span className={`badge${state === 'start' ? ' live' : ''}`}>
             {state === 'start' ? '答题进行中' : '等待开始'}
           </span>
         </div>
       </header>
+
+      {connection === 'offline' && (
+        <div className="screen-sync-alert" role="status" aria-live="polite">
+          实时连接中断，榜单每 10 秒尝试恢复
+          {lastUpdate ? ` · 最后更新 ${lastUpdate.toLocaleTimeString('zh-CN', { hour12: false })}` : ''}
+        </div>
+      )}
 
       <div className="screen-stats">
         {myRank && (

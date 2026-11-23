@@ -131,6 +131,8 @@ function Hero({
   primaryTo,
   secondaryTo,
   backgrounds,
+  moduleCount,
+  questionCount,
   uptimeSeconds,
   uptimeStartedAt,
 }: {
@@ -138,6 +140,8 @@ function Hero({
   primaryTo?: string
   secondaryTo?: string
   backgrounds: string[]
+  moduleCount: number
+  questionCount: number | null
   uptimeSeconds: number | null
   uptimeStartedAt: string | null
 }) {
@@ -179,8 +183,8 @@ function Hero({
           )}
         </div>
         <dl className="hero-facts" data-reveal style={{ '--reveal-delay': '380ms' } as CSSProperties}>
-          <div><dt>03</dt><dd>核心模块 / MODULES</dd></div>
-          <div><dt>150</dt><dd>开放题目 / QUESTIONS</dd></div>
+          <div><dt>{String(moduleCount).padStart(2, '0')}</dt><dd>启用模块 / MODULES</dd></div>
+          <div><dt>{questionCount === null ? '--' : questionCount.toLocaleString('zh-CN')}</dt><dd>开放题目 / QUESTIONS</dd></div>
           <div className={uptimeIsLong ? 'uptime-fact is-long' : 'uptime-fact'}>
             <dt>{formatUptime(uptimeSeconds, uptimeStartedAt)}</dt>
             <dd>系统在线 / UPTIME</dd>
@@ -370,10 +374,45 @@ function LotterySignal({
   )
 }
 
+function Gallery({ section }: { section: HomeSection }) {
+  const config = section.config
+  const images = (config.items || []).filter((item) => item.image_url)
+  return (
+    <section className="home-section gallery-section" aria-labelledby="gallery-title" data-reveal>
+      <div className="section-heading">
+        <div>
+          <p className="section-label">{config.eyebrow || 'FIELD NOTES / 活动影像'}</p>
+          <h2 id="gallery-title">{config.title || '协会现场'}</h2>
+        </div>
+        <p>{config.body || config.subtitle || '技术分享、比赛与协作时刻。'}</p>
+      </div>
+      {images.length > 0 ? (
+        <div className="gallery-grid">
+          {images.slice(0, 4).map((item, index) => (
+            <figure className={`gallery-item gallery-item-${index + 1}`} key={`${item.image_url}-${index}`}>
+              <img
+                src={item.image_url}
+                alt={item.title || `协会活动照片 ${index + 1}`}
+                loading="lazy"
+              />
+            </figure>
+          ))}
+        </div>
+      ) : (
+        <div className="gallery-empty">
+          <span>[ GALLERY / PENDING ]</span>
+          <p>活动照片正在整理，下一次现场见。</p>
+        </div>
+      )}
+    </section>
+  )
+}
+
 export default function Home() {
   const { site, featureEnabled } = useSite()
   const [uptimeSeconds, setUptimeSeconds] = useState<number | null>(null)
   const [uptimeStartedAt, setUptimeStartedAt] = useState<string | null>(null)
+  const [questionCount, setQuestionCount] = useState<number | null>(null)
   const sections = [...site.sections].filter((section) => section.enabled).sort((a, b) => a.sort - b.sort)
   const hero = sections.find((section) => section.kind === 'hero')
   const about = sections.find((section) => section.kind === 'about')
@@ -381,6 +420,7 @@ export default function Home() {
   const quiz = sections.find((section) => section.kind === 'quiz')
   const lottery = sections.find((section) => section.kind === 'lottery')
   const join = sections.find((section) => section.kind === 'join')
+  const moduleAnchor = sections.find((section) => section.kind === 'quiz' || section.kind === 'join')?.id
   const backgrounds = site.backgrounds.map((background) => background.path)
   const primaryTo = canVisit(hero?.config.primary_to, featureEnabled)
     ? hero?.config.primary_to
@@ -388,6 +428,9 @@ export default function Home() {
   const secondaryTo = canVisit(hero?.config.secondary_to, featureEnabled)
     ? hero?.config.secondary_to
     : featureEnabled('join') ? '/join' : undefined
+  const moduleCount = ['quiz', 'screen', 'join'].filter((key) => (
+    featureEnabled(key as SiteFeature['key'])
+  )).length
 
   useEffect(() => {
     let alive = true
@@ -418,6 +461,27 @@ export default function Home() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!featureEnabled('quiz')) {
+      setQuestionCount(null)
+      return
+    }
+    let alive = true
+    const syncQuestions = () => {
+      void api<{ questions: number }>('/api/stats')
+        .then((stats) => {
+          if (alive && Number.isFinite(stats.questions)) setQuestionCount(stats.questions)
+        })
+        .catch(() => undefined)
+    }
+    syncQuestions()
+    const timer = window.setInterval(syncQuestions, 60_000)
+    return () => {
+      alive = false
+      window.clearInterval(timer)
+    }
+  }, [featureEnabled])
+
   return (
     <>
       <PageMeta
@@ -425,19 +489,43 @@ export default function Home() {
         description={site.brand.description}
       />
       <div className="site-home cosmic-home">
-        {hero && (
-          <Hero
-            section={hero}
-            primaryTo={primaryTo}
-            secondaryTo={secondaryTo}
-            backgrounds={backgrounds}
-            uptimeSeconds={uptimeSeconds}
-            uptimeStartedAt={uptimeStartedAt}
-          />
+        {sections.map((section) => {
+          if (section.kind === 'hero') {
+            return (
+              <Hero
+                key={section.id}
+                section={section}
+                primaryTo={primaryTo}
+                secondaryTo={secondaryTo}
+                backgrounds={backgrounds}
+                moduleCount={moduleCount}
+                questionCount={questionCount}
+                uptimeSeconds={uptimeSeconds}
+                uptimeStartedAt={uptimeStartedAt}
+              />
+            )
+          }
+          if (section.kind === 'about') {
+            return <Whoami key={section.id} section={section} activities={activities} />
+          }
+          if ((section.kind === 'quiz' || section.kind === 'join') && section.id === moduleAnchor) {
+            return <Modules key={section.id} quiz={quiz} join={join} featureEnabled={featureEnabled} />
+          }
+          if (section.kind === 'lottery') {
+            return <LotterySignal key={section.id} section={section} enabled={featureEnabled('lottery')} />
+          }
+          if (section.kind === 'gallery') {
+            return <Gallery key={section.id} section={section} />
+          }
+          return null
+        })}
+        {sections.length === 0 && (
+          <section className="state-page" role="status">
+            <p className="eyebrow">SITE / STANDBY</p>
+            <h1>首页内容正在准备</h1>
+            <p>管理员启用并发布首页模块后，这里会自动展示最新内容。</p>
+          </section>
         )}
-        <Whoami section={about} activities={activities} />
-        <Modules quiz={quiz} join={join} featureEnabled={featureEnabled} />
-        <LotterySignal section={lottery} enabled={featureEnabled('lottery')} />
       </div>
     </>
   )

@@ -543,6 +543,7 @@ func (s *Service) RankOf(ctx context.Context, userID int64) (int64, int64, error
 type Stats struct {
 	Participants int64 `json:"participants"` // 参与答题人数
 	Attempts     int64 `json:"attempts"`     // 累计答题次数
+	Questions    int64 `json:"questions"`    // 当前启用题目数
 }
 
 func (s *Service) Stats(ctx context.Context) (*Stats, error) {
@@ -554,7 +555,11 @@ func (s *Service) Stats(ctx context.Context) (*Stats, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Stats{Participants: p, Attempts: a}, nil
+	q, err := s.store.CountQuestions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &Stats{Participants: p, Attempts: a, Questions: q}, nil
 }
 
 // ---------- footer ----------

@@ -30,11 +30,21 @@ interface AdminOverviewProps {
   data: AdminOverviewData
   quizState: 'start' | 'stop'
   canReadAudit: boolean
+  loading: boolean
+  updatedAt: Date | null
+  onRefresh: () => void
 }
 
 type DeltaKey = 'users' | 'participants' | 'attempts' | 'online'
 
-export default function AdminOverview({ data, quizState, canReadAudit }: AdminOverviewProps) {
+export default function AdminOverview({
+  data,
+  quizState,
+  canReadAudit,
+  loading,
+  updatedAt,
+  onRefresh,
+}: AdminOverviewProps) {
   const previous = useRef<AdminOverviewData['overview'] | null>(null)
   const [deltas, setDeltas] = useState<Record<DeltaKey, number>>({
     users: 0,
@@ -113,13 +123,21 @@ export default function AdminOverview({ data, quizState, canReadAudit }: AdminOv
   ]
 
   return (
-    <section className="admin-overview" aria-labelledby="overview-title">
+    <section className="admin-overview" aria-labelledby="overview-title" aria-busy={loading}>
       <div className="workbench-head">
         <div>
           <p className="section-command"><span>$</span> systemctl status nebula_os</p>
           <h2 id="overview-title">控制台概览 <span>WORKBENCH</span></h2>
         </div>
-        <div className="workbench-live"><i aria-hidden="true" /> LIVE · 10s REFRESH</div>
+        <div className="workbench-actions">
+          <span className="workbench-live" role="status" aria-live="polite">
+            <i aria-hidden="true" />
+            {loading ? '正在同步…' : `实时 · ${updatedAt?.toLocaleTimeString('zh-CN', { hour12: false }) || '待同步'}`}
+          </span>
+          <button className="mini-btn" type="button" disabled={loading} onClick={onRefresh}>
+            {loading ? '刷新中…' : '刷新'}
+          </button>
+        </div>
       </div>
 
       <div className="stat-grid">

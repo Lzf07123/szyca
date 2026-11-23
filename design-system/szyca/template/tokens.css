@@ -2,7 +2,7 @@
  * szyca · Digital Deep Space template v1.0.6
  * Project-owned visual layer; no Li&Design submodule dependency.
  * Generated snapshot from frontend/src/index.css
- * source-sha256: 299de329351eada9f8247dd5954a48ebac0bfc7c581129e738aa90a233021413
+ * source-sha256: dbb812a69037bf0c2a599773f3c86523f3eadd5dcb5b37ccee41d0b59d03ef60
  * Do not edit directly. Run scripts/export_design_template.py --write.
  */
 :root {
@@ -35,7 +35,7 @@
   --radius-lg: 14px;
   --page-gutter: clamp(16px, 4vw, 64px);
   --page-max: 1280px;
-  --header-height: 68px;
+  --header-height: 60px;
   --section-space: clamp(72px, 8vw, 128px);
   --section-heading-space: clamp(32px, 4vw, 56px);
   --page-tail-space: clamp(64px, 8vw, 112px);

@@ -97,7 +97,7 @@
 | POST | `/api/answer` | 提交当前题 |
 | GET | `/api/me` | 个人成绩与排名 |
 | GET | `/api/rank?top=99` | 排行榜 |
-| GET | `/api/stats` | 聚合统计 |
+| GET | `/api/stats` | 聚合统计：参与人数、累计答题、启用题目数、在线连接数 |
 | GET | `/api/runtime` | 公开系统运行时长；返回 `uptime_seconds` 与 `started_at`，`Cache-Control: no-store` |
 | GET | `/ws` | 实时更新 WebSocket |
 

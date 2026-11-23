@@ -1,6 +1,18 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Navigate, useBlocker, useNavigate } from 'react-router-dom'
-import { api, clearToken, flushPending, getDeviceFP, getToken, loadPending, pushPending, randomID, setToken } from '../api/client'
+import {
+  api,
+  clearToken,
+  flushPending,
+  getDeviceFP,
+  getToken,
+  loadPending,
+  pushPending,
+  randomID,
+  removePending,
+  setToken,
+  type PendingAnswer,
+} from '../api/client'
 import PageIntro from '../components/PageIntro'
 import { usePageMeta } from '../components/PageMeta'
 import { QuizSocket, wsURL } from '../ws/socket'
@@ -52,6 +64,8 @@ export default function Quiz() {
   const [exitedInfo, setExitedInfo] = useState<{ round_no: number; answered: number; total: number } | null>(null)
   const [quizState, setQuizState] = useState<'start' | 'stop'>('stop')
   const [difficulty, setDifficulty] = useState('全部')
+  const [pendingAnswer, setPendingAnswer] = useState<PendingAnswer | null>(null)
+  const [syncingAnswer, setSyncingAnswer] = useState(false)
   const [confirmReq, setConfirmReq] = useState<{ kind: 'identity' | 'round'; byDevice: boolean; step: 'ask' | 'final' } | null>(null)
   const locked = useRef(false)
   const sockRef = useRef<QuizSocket | null>(null)
@@ -112,6 +126,20 @@ export default function Quiz() {
     return () => window.removeEventListener('beforeunload', h)
   }, [phase])
 
+  useEffect(() => {
+    if (!confirmReq) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setConfirmReq(null)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [confirmReq])
+
   // 2) 页内跳转 / 浏览器前进后退 → useBlocker 确认
   const blocker = useBlocker(phase === 'quiz')
   useEffect(() => {
@@ -145,6 +173,8 @@ export default function Quiz() {
     setFeedback(null)
     setSelected(null)
     setExpired(false)
+    setPendingAnswer(null)
+    setSyncingAnswer(false)
     locked.current = false
     if (flashMsg) setFlash(flashMsg)
     if (d.questions.length === 0) {
@@ -183,6 +213,8 @@ export default function Quiz() {
     sessionStorage.removeItem('quiz_nick')
     setMyNick('')
     setNeedsNewRound(false)
+    setPendingAnswer(null)
+    setSyncingAnswer(false)
     sockRef.current?.close()
     setFlash('原答题身份已失效，请重新进入')
     setError('')
@@ -371,6 +403,8 @@ export default function Quiz() {
       setIdx(0)
       setFeedback(null)
       setSelected(null)
+      setPendingAnswer(null)
+      setSyncingAnswer(false)
       locked.current = false
       setFlash('本轮已放弃，可重新选择难度开始新一轮')
       setError('')
@@ -410,6 +444,8 @@ export default function Quiz() {
     setIdx(0)
     setFeedback(null)
     setSelected(null)
+    setPendingAnswer(null)
+    setSyncingAnswer(false)
     setNeedsNewRound(false)
     locked.current = false
     setPhase('name')
@@ -435,20 +471,56 @@ export default function Quiz() {
       }
       if (err.status && err.status < 500 && err.status !== 429) {
         setFeedback(null)
+        setPendingAnswer(null)
         setExpired(true)
         setFlash(`${err.message}，请放弃本轮后重新开始`)
         return
       }
-      // 网络或服务端瞬时错误：本地缓冲，恢复后自动补交。
-      pushPending({ request_id: requestId, question_id: q.id, selected: i })
-      setFeedback({ correct: false, correct_answer: -1, score: 0, duplicate: false })
+      // 网络或服务端瞬时错误：保持提交锁定，确认服务端结果前不展示对错、不推进下一题。
+      const pending = { request_id: requestId, question_id: q.id, selected: i }
+      pushPending(pending)
+      setFeedback(null)
+      setPendingAnswer(pending)
       setSelected(i)
-      setFlash('网络异常，答案已缓存，恢复后自动补交')
+      setFlash('答案已保存在本机，正在等待网络恢复')
+    }
+  }
+
+  async function retryPendingAnswer() {
+    if (!pendingAnswer || syncingAnswer) return
+    const item = pendingAnswer
+    setSyncingAnswer(true)
+    try {
+      const res = await api<AnswerRes>('/api/answer', {
+        method: 'POST',
+        body: JSON.stringify(item),
+      })
+      removePending(item.request_id)
+      setFeedback(res)
+      if (res.next_deadline) applyServerDeadline(res.next_deadline)
+      setPendingAnswer(null)
+      setFlash(res.duplicate ? '答案已确认，服务端已记录该次提交' : '答案已同步')
+    } catch (e) {
+      const err = e as Error & { status?: number }
+      if (err.status === 401) {
+        authLost()
+        return
+      }
+      if (err.status && err.status < 500 && err.status !== 429) {
+        removePending(item.request_id)
+        setPendingAnswer(null)
+        setExpired(true)
+        setFlash(`${err.message}，请放弃本轮后重新开始`)
+        return
+      }
+      setFlash('网络仍未恢复，答案已保留，本页会继续自动重试')
+    } finally {
+      setSyncingAnswer(false)
     }
   }
 
   function choose(i: number) {
-    if (locked.current || phase !== 'quiz' || feedback || expired) return
+    if (locked.current || phase !== 'quiz' || feedback || pendingAnswer || expired) return
     if (quizState !== 'start') {
       setFlash('答题未开始或已结束，无法提交')
       return
@@ -458,8 +530,11 @@ export default function Quiz() {
   }
 
   function advance() {
+    if (pendingAnswer) return
     setFeedback(null)
     setSelected(null)
+    setPendingAnswer(null)
+    setSyncingAnswer(false)
     locked.current = false
     if (idx + 1 >= questions.length) {
       // 答题结束跳转成绩页：主动放行，不弹离开确认
@@ -472,19 +547,24 @@ export default function Quiz() {
 
   // 倒计时以服务端截止时间为准；出现作答反馈后暂停显示。
   useEffect(() => {
-    if (phase !== 'quiz' || feedback || expired || deadline <= 0) return
+    if (phase !== 'quiz' || feedback || pendingAnswer || expired || deadline <= 0) return
     const sync = () => setSeconds(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)))
     sync()
     const t = window.setInterval(sync, 250)
     return () => clearInterval(t)
-  }, [phase, idx, feedback, expired, deadline])
+  }, [phase, idx, feedback, pendingAnswer, expired, deadline])
 
   // 作答后自动进入下一题；超时则提交一条空答案，让服务端同步推进题序。
   useEffect(() => {
     if (phase !== 'quiz') return
     if (expired) return
+    if (pendingAnswer) {
+      if (syncingAnswer) return
+      const t = window.setTimeout(() => void retryPendingAnswer(), 3000)
+      return () => clearTimeout(t)
+    }
     if (feedback) {
-      const t = window.setTimeout(advance, 1200)
+      const t = window.setTimeout(advance, 2400)
       return () => clearTimeout(t)
     }
     if (seconds <= 0 && !locked.current) {
@@ -492,7 +572,7 @@ export default function Quiz() {
       void answer(null, randomID())
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, feedback, expired, seconds])
+  }, [phase, feedback, pendingAnswer, syncingAnswer, expired, seconds])
 
   if (phase === 'done') return <Navigate to="/result" replace />
 
@@ -545,8 +625,9 @@ export default function Quiz() {
               if (i === feedback.correct_answer) cls += ' correct'
               else if (i === selected) cls += ' wrong'
             }
+            if (pendingAnswer && i === selected) cls += ' pending'
             return (
-              <button key={i} className={cls} disabled={!!feedback} onClick={() => choose(i)}>
+              <button key={i} className={cls} disabled={!!feedback || !!pendingAnswer} onClick={() => choose(i)}>
                 <span className="opt-key">{String.fromCharCode(65 + i)}</span>
                 <span className="opt-text">{opt}</span>
               </button>
@@ -564,17 +645,43 @@ export default function Quiz() {
           </div>
         )}
         {feedback && (
-          <p className={`feedback${feedback.correct ? ' ok' : ' bad'}`}>
-            {feedback.correct ? `✔ 回答正确 +${feedback.score} 分` : '✘ 回答错误'}
-          </p>
+          <div className="feedback-row">
+            <p
+              className={`feedback${feedback.correct ? ' ok' : ' bad'}`}
+              role="status"
+              aria-live="polite"
+            >
+              {feedback.correct ? `回答正确 +${feedback.score} 分` : '回答错误'}
+            </p>
+            <button className="mini-btn" type="button" onClick={advance}>
+              {idx + 1 >= total ? '查看成绩' : '下一题'}
+              <span aria-hidden="true"> →</span>
+            </button>
+          </div>
+        )}
+        {pendingAnswer && (
+          <div className="feedback-row pending-row">
+            <p className="feedback pending" role="status" aria-live="polite">
+              {syncingAnswer ? '正在确认答案…' : '答案待同步'}
+            </p>
+            <button
+              className="mini-btn"
+              type="button"
+              disabled={syncingAnswer}
+              onClick={() => void retryPendingAnswer()}
+            >
+              {syncingAnswer ? '同步中…' : '立即重试'}
+            </button>
+          </div>
         )}
         {flash && <p className="flash">{flash}</p>}
       </section>
     )
   } else if (phase === 'loading') {
     body = (
-      <section className="card center">
-        <p className="muted">加载中…</p>
+      <section className="card center result-state" role="status" aria-live="polite">
+        <span className="loading-mark" aria-hidden="true" />
+        <p className="muted">正在同步答题身份与当前进度…</p>
       </section>
     )
   } else if (exitedInfo) {
@@ -699,10 +806,16 @@ export default function Quiz() {
       {body}
       {confirmReq && (
         <div className="modal-veil" onClick={() => setConfirmReq(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="quiz-confirm-title"
+            onClick={(e) => e.stopPropagation()}
+          >
             {confirmReq.step === 'ask' ? (
               <>
-                <h3>{confirmReq.kind === 'identity' ? '放弃当前答题身份？' : '放弃本轮答题？'}</h3>
+                <h3 id="quiz-confirm-title">{confirmReq.kind === 'identity' ? '放弃当前答题身份？' : '放弃本轮答题？'}</h3>
                 <ul className="side-effects">
                   {confirmReq.kind === 'identity' ? (
                     <>
@@ -721,9 +834,10 @@ export default function Quiz() {
                   )}
                 </ul>
                 <div className="modal-actions">
-                  <button className="btn" onClick={() => setConfirmReq(null)}>取消</button>
+                  <button className="btn" type="button" autoFocus onClick={() => setConfirmReq(null)}>取消</button>
                   <button
                     className="btn btn-primary"
+                    type="button"
                     onClick={() => setConfirmReq({ ...confirmReq, step: 'final' })}
                   >
                     继续
@@ -732,17 +846,17 @@ export default function Quiz() {
               </>
             ) : (
               <>
-                <h3>最后确认</h3>
+                <h3 id="quiz-confirm-title">最后确认</h3>
                 <p className="muted">
                   {confirmReq.kind === 'identity'
                     ? `放弃操作不可撤销：身份立即失效，昵称「${myNick || boundNick || '当前身份'}」永久不可再用。确定要放弃吗？`
                     : '确认放弃本轮？本轮已提交的答案将被作废（历史最佳成绩不受影响）。'}
                 </p>
                 <div className="modal-actions">
-                  <button className="btn" onClick={() => setConfirmReq({ ...confirmReq, step: 'ask' })}>
+                  <button className="btn" type="button" autoFocus onClick={() => setConfirmReq({ ...confirmReq, step: 'ask' })}>
                     返回
                   </button>
-                  <button className="btn btn-primary" onClick={() => void confirmAbandon()}>
+                  <button className="btn btn-primary" type="button" onClick={() => void confirmAbandon()}>
                     确认放弃
                   </button>
                 </div>

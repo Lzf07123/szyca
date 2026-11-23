@@ -18,6 +18,7 @@ interface Props {
   canManageLottery: boolean
   onMessage: (message: string, error?: boolean) => void
   onSaved: () => Promise<void>
+  onDirtyChange: (dirty: boolean) => void
 }
 
 function localDateTime(value?: string) {
@@ -32,11 +33,13 @@ export default function SiteEditor({
   canManageLottery,
   onMessage,
   onSaved,
+  onDirtyChange,
 }: Props) {
   const [sections, setSections] = useState<ManagedSection[]>([])
   const [features, setFeatures] = useState<SiteFeature[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [dirty, setDirty] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -47,6 +50,7 @@ export default function SiteEditor({
       ])
       setSections(sectionData.sections)
       setFeatures(featureData.features)
+      setDirty(false)
     } catch (cause) {
       onMessage((cause as Error).message, true)
     } finally {
@@ -58,13 +62,30 @@ export default function SiteEditor({
     void load()
   }, [])
 
+  useEffect(() => {
+    onDirtyChange(dirty)
+    return () => onDirtyChange(false)
+  }, [dirty, onDirtyChange])
+
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
+
   const updateSection = <K extends keyof ManagedSection>(id: number, key: K, value: ManagedSection[K]) => {
+    setDirty(true)
     setSections((current) => current.map((section) => (
       section.id === id ? { ...section, [key]: value } : section
     )))
   }
 
   const updateConfig = (id: number, key: keyof SectionConfig, value: string) => {
+    setDirty(true)
     setSections((current) => current.map((section) => (
       section.id === id ? { ...section, config: { ...section.config, [key]: value } } : section
     )))
@@ -91,6 +112,7 @@ export default function SiteEditor({
       })
       await onSaved()
       await load()
+      setDirty(false)
       onMessage('首页 Section 已保存，公开端无需重新构建')
     } catch (cause) {
       onMessage((cause as Error).message, true)
@@ -112,6 +134,7 @@ export default function SiteEditor({
       })
       await onSaved()
       await load()
+      setDirty(false)
       onMessage('模块开关已保存')
     } catch (cause) {
       onMessage((cause as Error).message, true)
@@ -155,9 +178,12 @@ export default function SiteEditor({
                   type="checkbox"
                   checked={feature.enabled}
                   disabled={!editable}
-                  onChange={(event) => setFeatures((current) => current.map((item) => (
-                    item.key === feature.key ? { ...item, enabled: event.target.checked } : item
-                  )))}
+                  onChange={(event) => {
+                    setDirty(true)
+                    setFeatures((current) => current.map((item) => (
+                      item.key === feature.key ? { ...item, enabled: event.target.checked } : item
+                    )))
+                  }}
                 />
               </label>
             )
@@ -175,6 +201,7 @@ export default function SiteEditor({
           <div>
             <p className="section-eyebrow">HOMEPAGE COMPOSITION</p>
             <h2>首页 Section</h2>
+          {dirty && <span className="status-chip unsaved">有未保存修改</span>}
           </div>
           {canWrite && (
             <button className="btn btn-primary" type="button" disabled={saving} onClick={() => void saveSections()}>

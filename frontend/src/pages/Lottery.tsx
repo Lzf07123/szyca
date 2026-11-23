@@ -114,6 +114,17 @@ export default function Lottery() {
   }
 
   const canDraw = authenticated && eligible && campaign?.state === 'active' && !draw
+  const blockedReason = !campaign
+    ? '当前没有可参与的抽奖活动。'
+    : !eligible
+      ? '完成至少一轮答题后，抽取按钮将自动解锁。'
+      : campaign.state === 'upcoming'
+        ? '活动尚未开始，请留意现场公告。'
+        : campaign.state === 'paused'
+          ? '活动已暂停，恢复后可直接参与。'
+          : campaign.state === 'ended'
+            ? '本场活动已经结束，请关注下一场活动。'
+            : ''
 
   return (
     <>
@@ -139,7 +150,7 @@ export default function Lottery() {
           </div>
           <div className="lottery-card">
           <div className="lottery-card-head">
-            <span className={`status-dot${campaign?.status === 'active' ? ' live' : ''}`} aria-hidden="true" />
+            <span className={`status-dot${campaign?.state === 'active' ? ' live' : ''}`} aria-hidden="true" />
             <strong>{loading ? '正在读取活动…' : campaignState(campaign)}</strong>
           </div>
           {campaign ? (
@@ -189,9 +200,19 @@ export default function Lottery() {
                     aria-busy={drawing}
                     onClick={() => void drawNow()}
                   >
-                    {drawing ? '正在抽取…' : canDraw ? '开始抽奖' : '当前不可抽取'}
+                    {drawing
+                      ? '正在抽取…'
+                      : canDraw
+                        ? '开始抽奖'
+                        : !eligible
+                          ? '完成答题后解锁'
+                          : campaign.state === 'paused'
+                            ? '活动暂停中'
+                            : campaign.state === 'ended'
+                              ? '活动已结束'
+                              : '等待活动开始'}
                   </button>
-                  {!eligible && <p>完成一轮答题后，抽取按钮将自动解锁。</p>}
+                  {blockedReason && <p>{blockedReason}</p>}
                 </div>
               )}
             </>

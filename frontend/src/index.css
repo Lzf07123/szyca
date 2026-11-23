@@ -28,7 +28,7 @@
   --radius-lg: 14px;
   --page-gutter: clamp(16px, 4vw, 64px);
   --page-max: 1280px;
-  --header-height: 68px;
+  --header-height: 60px;
   --section-space: clamp(72px, 8vw, 128px);
   --section-heading-space: clamp(32px, 4vw, 56px);
   --page-tail-space: clamp(64px, 8vw, 112px);
