@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { api, clearCSRFToken, csrfHeader, setCSRFToken } from '../api/client'
 import { setFavicon, useSite } from '../api/site'
 import { usePageMeta } from '../components/PageMeta'
 import AccessPanel from './admin/AccessPanel'
 import AdminLottery from './admin/AdminLottery'
-import AdminOverview from './admin/AdminOverview'
+import AdminOverview, { type OverviewAction } from './admin/AdminOverview'
 import AuditPanel from './admin/AuditPanel'
 import MediaPanel from './admin/MediaPanel'
 import SiteEditor from './admin/SiteEditor'
@@ -61,13 +62,19 @@ type AdminTab = 'overview' | 'control' | 'questions' | 'site' | 'lottery' | 'app
 
 const ADMIN_TABS: Array<{ key: AdminTab; label: string; permission: string }> = [
   { key: 'overview', label: '概览', permission: 'site.read' },
-  { key: 'control', label: '答题控制', permission: 'quiz.operate' },
-  { key: 'questions', label: '题库', permission: 'quiz.read' },
-  { key: 'site', label: '站点内容', permission: 'site.read' },
+  { key: 'control', label: '现场控制', permission: 'quiz.operate' },
   { key: 'lottery', label: '抽奖', permission: 'lottery.configure' },
+  { key: 'site', label: '站点内容', permission: 'site.read' },
+  { key: 'questions', label: '题库', permission: 'quiz.read' },
   { key: 'appearance', label: '媒体与外观', permission: 'media.read' },
   { key: 'access', label: '管理员', permission: 'access.manage' },
   { key: 'audit', label: '审计', permission: 'audit.read' },
+]
+
+const ADMIN_GROUPS: Array<{ label: string; key: string; tabs: AdminTab[] }> = [
+  { key: 'operations', label: '现场运营', tabs: ['overview', 'control', 'lottery'] },
+  { key: 'content', label: '内容维护', tabs: ['site', 'questions', 'appearance'] },
+  { key: 'governance', label: '系统治理', tabs: ['access', 'audit'] },
 ]
 
 const roleLabel: Record<AdminAccount['role'], string> = {
@@ -98,6 +105,9 @@ export default function Admin() {
     const requested = searchParams.get('tab')
     return isAdminTab(requested) ? requested : 'overview'
   })
+  const [navOpen, setNavOpen] = useState(false)
+  const navToggleRef = useRef<HTMLButtonElement>(null)
+  const adminContentRef = useRef<HTMLDivElement>(null)
   const [wipe, setWipe] = useState<{ target: 'questions' | 'bgs'; step: 'ask' | 'final' } | null>(null)
   const [qState, setQState] = useState<'start' | 'stop'>('stop')
   const [qBusy, setQBusy] = useState(false)
@@ -135,6 +145,12 @@ export default function Admin() {
       return
     }
     setTab(next)
+    setNavOpen(false)
+    setMsg((current) => current.startsWith('✔') ? '' : current)
+    window.requestAnimationFrame(() => {
+      adminContentRef.current?.scrollIntoView({ block: 'start', behavior: 'auto' })
+      adminContentRef.current?.focus({ preventScroll: true })
+    })
     setSearchParams((current) => {
       const updated = new URLSearchParams(current)
       if (next === 'overview') updated.delete('tab')
@@ -142,6 +158,23 @@ export default function Admin() {
       return updated
     }, { replace: true })
   }, [setSearchParams, siteDirty, tab])
+
+  useEffect(() => {
+    if (!msg || !msg.startsWith('✔')) return
+    const timer = window.setTimeout(() => setMsg(''), 4500)
+    return () => window.clearTimeout(timer)
+  }, [msg])
+
+  useEffect(() => {
+    if (!navOpen) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setNavOpen(false)
+      navToggleRef.current?.focus()
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [navOpen])
 
   const reportLoadFailure = useCallback((scope: string, cause: unknown) => {
     setDataErrors((current) => ({
@@ -186,6 +219,12 @@ export default function Admin() {
     const requested = searchParams.get('tab')
     if (!isAdminTab(requested) || requested === tab) return
     setTab(requested)
+    setNavOpen(false)
+    setMsg((current) => current.startsWith('✔') ? '' : current)
+    window.requestAnimationFrame(() => {
+      adminContentRef.current?.scrollIntoView({ block: 'start', behavior: 'auto' })
+      adminContentRef.current?.focus({ preventScroll: true })
+    })
   }, [searchParams, tab])
 
   useEffect(() => {
@@ -269,12 +308,20 @@ export default function Admin() {
     return () => clearInterval(t)
   }, [verified, can])
 
-  // 概览 10s 自动刷新
+  // 概览 10s 自动刷新；等待上一次请求结束后再排下一次，避免慢请求叠加
   useEffect(() => {
     if (!verified || !can('site.read')) return
-    void loadOverview()
-    const t = window.setInterval(() => void loadOverview(), 10000)
-    return () => clearInterval(t)
+    let cancelled = false
+    let timer = 0
+    const poll = async () => {
+      await loadOverview()
+      if (!cancelled) timer = window.setTimeout(poll, 10000)
+    }
+    timer = window.setTimeout(poll, 10000)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
   }, [verified, can, loadOverview])
 
   const switchState = async (next: 'start' | 'stop') => {
@@ -652,6 +699,57 @@ export default function Admin() {
     })
   }, [questionDifficulty, questionQuery, questionStatus, questions])
 
+  const draftOptions = options.split('\n').map((option) => option.trim()).filter(Boolean)
+  const answerOption = draftOptions[answerIdx]
+  const allowedTabs = ADMIN_TABS.filter((item) => can(item.permission))
+  const visibleTab = allowedTabs.some((item) => item.key === tab) ? tab : allowedTabs[0]?.key
+  const visibleTabMeta = ADMIN_TABS.find((item) => item.key === visibleTab)
+
+  useEffect(() => {
+    if (!account || !visibleTab || visibleTab === tab) return
+    setTab(visibleTab)
+    setSearchParams((current) => {
+      const updated = new URLSearchParams(current)
+      if (visibleTab === 'overview') updated.delete('tab')
+      else updated.set('tab', visibleTab)
+      return updated
+    }, { replace: true })
+  }, [account, setSearchParams, tab, visibleTab])
+
+  const quickActions: OverviewAction[] = []
+  if (allowedTabs.some((item) => item.key === 'control')) {
+    quickActions.push({
+      tab: 'control',
+      label: '现场控制',
+      description: qState === 'start' ? '答题正在进行，可结束本轮或广播现场通知' : '答题处于待机，可开始新一轮答题',
+      meta: qState === 'start' ? '进行中' : '待开始',
+    })
+  }
+  if (can('quiz.read')) {
+    quickActions.push({
+      tab: 'questions',
+      label: '题库维护',
+      description: questionsLoading ? '正在同步题目状态' : `${questions.filter((question) => question.active).length} / ${questions.length} 道题启用`,
+      meta: '内容准备',
+    })
+  }
+  if (can('site.read')) {
+    quickActions.push({
+      tab: 'site',
+      label: '站点发布',
+      description: '检查公开模块、首页内容编排与发布状态',
+      meta: can('site.write') ? '可编辑' : '只读',
+    })
+  }
+  if (can('lottery.configure')) {
+    quickActions.push({
+      tab: 'lottery',
+      label: '活动运营',
+      description: '配置资格与库存，处理领取核销和结果导出',
+      meta: '活动工作台',
+    })
+  }
+
   if (authChecking) {
     return (
       <section className="admin">
@@ -706,58 +804,118 @@ export default function Admin() {
     )
   }
 
-  const allowedTabs = ADMIN_TABS.filter((item) => can(item.permission))
-  const visibleTab = allowedTabs.some((item) => item.key === tab) ? tab : allowedTabs[0]?.key
+  const feedbackError = msg.startsWith('✘')
+  const feedbackText = msg.replace(/^[✔✘]\s*/, '')
 
   return (
     <section className="admin">
-      <div className="card admin-top">
+      <header className="admin-top">
         <div className="admin-top-inner">
-          <div>
+          <div className="admin-title-block">
             <p className="section-eyebrow">ADMIN CONSOLE</p>
-            <h2>后台管理</h2>
-            <p className="admin-identity">{account.username} · {roleLabel[account.role]}</p>
+            <div className="admin-title-line">
+              <h1>后台管理</h1>
+              <p className="admin-identity">{account.username} · {roleLabel[account.role]}</p>
+            </div>
           </div>
-          <button className="mini-btn" type="button" onClick={() => void logout()}>
-            退出登录
-          </button>
+          <div className="admin-top-actions">
+            <span className={`admin-live-state${qState === 'start' ? ' is-live' : ''}`}>
+              <i aria-hidden="true" />
+              答题{qState === 'start' ? '进行中' : '待开始'}
+            </span>
+            <button className="mini-btn" type="button" onClick={() => void logout()}>
+              退出登录
+            </button>
+          </div>
         </div>
-        {msg && (
-          <div
-            className={`admin-feedback${msg.startsWith('✔') ? ' ok' : ' error'}`}
-            role={msg.startsWith('✔') ? 'status' : 'alert'}
-            aria-live={msg.startsWith('✔') ? 'polite' : 'assertive'}
-          >
-            <span>{msg}</span>
-            <button type="button" aria-label="关闭操作提示" onClick={() => setMsg('')}>×</button>
-          </div>
-        )}
-      </div>
+      </header>
 
-      <nav className="admin-tabs" aria-label="后台功能">
-        {allowedTabs.map((t) => (
+      <div className="admin-workspace">
+        <aside className="admin-sidebar" aria-label="后台工作区">
           <button
-            key={t.key}
+            ref={navToggleRef}
+            className="admin-nav-toggle"
             type="button"
-            className={`admin-tab${visibleTab === t.key ? ' on' : ''}`}
-            aria-current={visibleTab === t.key ? 'page' : undefined}
-            onClick={() => selectTab(t.key)}
+            aria-expanded={navOpen}
+            aria-controls="admin-navigation"
+            onClick={() => setNavOpen((open) => !open)}
           >
-            {t.label}
+            <span>
+              <small>当前功能</small>
+              <strong>{visibleTabMeta?.label ?? '后台功能'}</strong>
+            </span>
+            <span className="admin-nav-toggle-action">{navOpen ? '收起' : '切换'}</span>
           </button>
-        ))}
-      </nav>
 
-      {Object.keys(dataErrors).length > 0 && (
-        <div className="admin-sync-warning" role="alert">
-          <span>
-            部分后台数据没有同步成功：{Object.values(dataErrors).join('；')}
-          </span>
-          <button className="mini-btn" type="button" onClick={() => void reloadAll()}>
-            重新同步
-          </button>
-        </div>
-      )}
+          <div id="admin-navigation" className={`admin-nav-panel${navOpen ? ' is-open' : ''}`}>
+            <div className="admin-nav-heading">
+              <span>WORKSPACE</span>
+              <strong>管理功能</strong>
+            </div>
+            <nav className="admin-nav" aria-label="后台功能">
+              {ADMIN_GROUPS.map((group) => {
+                const groupTabs = allowedTabs.filter((item) => group.tabs.includes(item.key))
+                if (groupTabs.length === 0) return null
+                return (
+                  <div className="admin-nav-group" key={group.key}>
+                    <p>{group.label}</p>
+                    {groupTabs.map((item) => {
+                      const index = ADMIN_TABS.findIndex((candidate) => candidate.key === item.key) + 1
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          className={`admin-nav-link${visibleTab === item.key ? ' on' : ''}`}
+                          aria-current={visibleTab === item.key ? 'page' : undefined}
+                          onClick={() => selectTab(item.key)}
+                        >
+                          <span aria-hidden="true">{String(index).padStart(2, '0')}</span>
+                          {item.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )
+              })}
+            </nav>
+            <div className="admin-nav-footer">
+              <span>LIVE STATUS</span>
+              <strong className={qState === 'start' ? 'is-live' : undefined}>
+                <i aria-hidden="true" />
+                {qState === 'start' ? '答题进行中' : '答题待开始'}
+              </strong>
+              <small>现场状态每 5 秒同步</small>
+              {can('scores.read') && (
+                <button
+                  className="admin-utility-button"
+                  type="button"
+                  onClick={() => void download('/api/admin/export/scores', `scores-${Date.now()}.csv`)}
+                >
+                  <span>成绩数据</span>
+                  <b>导出 CSV</b>
+                </button>
+              )}
+            </div>
+          </div>
+        </aside>
+
+        <div
+          className="admin-content"
+          ref={adminContentRef}
+          tabIndex={-1}
+          role="region"
+          aria-label={`${visibleTabMeta?.label ?? '后台'}内容`}
+        >
+          {Object.keys(dataErrors).length > 0 && (
+            <div className="admin-sync-warning" role="alert">
+              <span>
+                部分后台数据没有同步成功：{Object.values(dataErrors).join('；')}
+              </span>
+              <button className="mini-btn" type="button" onClick={() => void reloadAll()}>
+                重新同步
+              </button>
+            </div>
+          )}
 
       {visibleTab === 'overview' && ov && (
         <AdminOverview
@@ -767,6 +925,11 @@ export default function Admin() {
           loading={overviewLoading}
           updatedAt={overviewUpdatedAt}
           onRefresh={() => void loadOverview()}
+          quickActions={quickActions}
+          onNavigate={(destination) => selectTab(destination)}
+          onExportScores={can('scores.read')
+            ? () => void download('/api/admin/export/scores', `scores-${Date.now()}.csv`)
+            : undefined}
         />
       )}
 
@@ -817,6 +980,13 @@ export default function Admin() {
 
       {visibleTab === 'control' && (
         <div className="card">
+          <div className="panel-head">
+            <div>
+              <p className="section-eyebrow">LIVE OPERATIONS</p>
+              <h2>现场控制</h2>
+              <p className="muted">答题开关、现场提示、互动效果与招新工具集中在这里。</p>
+            </div>
+          </div>
           <div className="admin-grid">
           <div className="admin-panel">
             <h3>答题控制</h3>
@@ -835,7 +1005,7 @@ export default function Admin() {
               {qBusy ? '处理中…' : '开始答题'}
             </button>
             <button
-              className="btn"
+              className="btn btn-danger-outline"
               type="button"
               disabled={qState === 'stop' || qBusy}
               onClick={() => void switchState('stop')}
@@ -941,17 +1111,6 @@ export default function Admin() {
               ))}
               {qrs.length === 0 && <li className="muted">暂无二维码，上传后「加入我们」页即可扫码</li>}
             </ul>
-          </div>}
-
-          {can('scores.read') && <div className="admin-panel">
-            <h3>数据导出</h3>
-            <p className="muted">导出全部用户最高成绩 CSV（Excel 可直接打开）</p>
-            <button
-              className="btn btn-secondary"
-              onClick={() => void download('/api/admin/export/scores', `scores-${Date.now()}.csv`)}
-            >
-              导出成绩
-            </button>
           </div>}
 
       </div>
@@ -1107,7 +1266,7 @@ export default function Admin() {
                     <button className="mini-btn" onClick={() => void toggleBg(b)}>
                       {b.active ? '停用' : '启用'}
                     </button>
-                    <button className="mini-btn" onClick={() => void delBg(b)}>
+                    <button className="mini-btn danger" onClick={() => void delBg(b)}>
                       删除
                     </button>
                   </span>}
@@ -1168,16 +1327,33 @@ export default function Admin() {
             </label>
             <label className="field">
               选项（每行一个）
-              <textarea rows={4} value={options} onChange={(e) => setOptions(e.target.value)} />
+              <textarea
+                rows={4}
+                value={options}
+                onChange={(e) => {
+                  const nextOptions = e.target.value.split('\n').map((option) => option.trim()).filter(Boolean)
+                  setOptions(e.target.value)
+                  if (answerIdx >= nextOptions.length) setAnswerIdx(Math.max(0, nextOptions.length - 1))
+                }}
+              />
             </label>
             <label className="field">
-              正确选项序号（0 起）
-              <input
-                type="number"
-                min={0}
+              正确答案
+              <select
                 value={answerIdx}
+                disabled={draftOptions.length === 0}
                 onChange={(e) => setAnswerIdx(Number(e.target.value))}
-              />
+              >
+                {draftOptions.length === 0 && <option value={0}>请先填写选项</option>}
+                {draftOptions.map((option, index) => (
+                  <option key={`${index}-${option}`} value={index}>
+                    {String.fromCharCode(65 + index)}. {option}
+                  </option>
+                ))}
+              </select>
+              <span className="field-hint">
+                {answerOption ? `当前正确项：${String.fromCharCode(65 + answerIdx)}. ${answerOption}` : '填写选项后可直接选择正确答案'}
+              </span>
             </label>
             <label className="field">
               分值
@@ -1194,10 +1370,11 @@ export default function Admin() {
             <button
               className="btn btn-primary"
               type="button"
+              disabled={!content.trim() || draftOptions.length < 2 || answerIdx >= draftOptions.length || score < 1}
               onClick={() =>
                 void act(
                   '/api/admin/questions',
-                  { content, options: options.split('\n').map((s) => s.trim()).filter(Boolean), answer: answerIdx, score, difficulty },
+                  { content, options: draftOptions, answer: answerIdx, score, difficulty },
                   '题目已添加',
                 )
               }
@@ -1271,6 +1448,23 @@ export default function Admin() {
       </div>
       )}
 
+        </div>
+      </div>
+
+      {msg && createPortal(
+        <div
+          className={`admin-feedback admin-toast${feedbackError ? ' error' : ' ok'}`}
+          role={feedbackError ? 'alert' : 'status'}
+          aria-live={feedbackError ? 'assertive' : 'polite'}
+          aria-atomic="true"
+        >
+          <span className="admin-feedback-kind">{feedbackError ? '错误' : '完成'}</span>
+          <span className="admin-feedback-copy">{feedbackText}</span>
+          <button type="button" aria-label="关闭操作提示" onClick={() => setMsg('')}>×</button>
+        </div>,
+        document.body,
+      )}
+
       {wipe && (
         <div className="modal-veil" onClick={() => setWipe(null)}>
           <div
@@ -1311,7 +1505,7 @@ export default function Admin() {
                 </p>
                 <div className="modal-actions">
                   <button className="btn" type="button" autoFocus onClick={() => setWipe({ ...wipe, step: 'ask' })}>返回</button>
-                  <button className="btn btn-primary" type="button" onClick={() => void confirmWipe()}>确认清空</button>
+                  <button className="btn btn-danger" type="button" onClick={() => void confirmWipe()}>确认清空</button>
                 </div>
               </>
             )}

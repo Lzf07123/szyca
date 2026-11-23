@@ -76,6 +76,7 @@ function Layout() {
   const navToggleRef = useRef<HTMLButtonElement>(null)
   const fullscreen = pathname === '/screen'
   const isHome = pathname === '/'
+  const isAdmin = pathname === '/admin'
   useScrollReveal(pathname)
 
   useEffect(() => {
@@ -128,7 +129,7 @@ function Layout() {
       <CosmicBackdrop />
       <a className="skip-link" href="#main-content">跳到主要内容</a>
       {!fullscreen && (
-        <header className={`topbar public-topbar${headerScrolled ? ' is-scrolled' : ''}`}>
+        <header className={`topbar public-topbar${headerScrolled ? ' is-scrolled' : ''}${isAdmin ? ' admin-route' : ''}`}>
           <Link className={`logo${site.brand.logo_url ? ' has-img' : ''}`} to="/" aria-label={`${site.brand.name}首页`}>
             <BrandMark variant="header" />
             <span className="logo-copy">
@@ -136,31 +137,35 @@ function Layout() {
               <small>COMPUTER ASSOCIATION</small>
             </span>
           </Link>
-          <button
-            ref={navToggleRef}
-            className="nav-toggle"
-            type="button"
-            aria-expanded={menuOpen}
-            aria-controls="site-navigation"
-            onClick={() => setMenuOpen((open) => !open)}
-          >
-            <span aria-hidden="true" />
-            <span aria-hidden="true" />
-            <span className="sr-only">{menuOpen ? '关闭导航' : '打开导航'}</span>
-          </button>
-          <nav id="site-navigation" className={`public-nav${menuOpen ? ' open' : ''}`} aria-label="主导航">
-            {site.nav.map((item, index) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/'}
-                className={({ isActive }) => (isActive ? 'active' : undefined)}
+          {!isAdmin && (
+            <>
+              <button
+                ref={navToggleRef}
+                className="nav-toggle"
+                type="button"
+                aria-expanded={menuOpen}
+                aria-controls="site-navigation"
+                onClick={() => setMenuOpen((open) => !open)}
               >
-                <span className="nav-prefix" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
+                <span aria-hidden="true" />
+                <span aria-hidden="true" />
+                <span className="sr-only">{menuOpen ? '关闭导航' : '打开导航'}</span>
+              </button>
+              <nav id="site-navigation" className={`public-nav${menuOpen ? ' open' : ''}`} aria-label="主导航">
+                {site.nav.map((item, index) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.to === '/'}
+                    className={({ isActive }) => (isActive ? 'active' : undefined)}
+                  >
+                    <span className="nav-prefix" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+                    {item.label}
+                  </NavLink>
+                ))}
+              </nav>
+            </>
+          )}
         </header>
       )}
       {error && !fullscreen && (

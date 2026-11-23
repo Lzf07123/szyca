@@ -22,13 +22,21 @@ export default function AccessPanel({ onMessage }: { onMessage: (message: string
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<Account['role']>('content_editor')
   const [busy, setBusy] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
 
   const load = async () => {
+    setLoading(true)
+    setLoadError('')
     try {
       const data = await api<{ accounts: Account[] }>('/api/admin/accounts')
       setAccounts(data.accounts)
     } catch (cause) {
-      onMessage((cause as Error).message, true)
+      const message = (cause as Error).message || '管理员列表读取失败'
+      setLoadError(message)
+      onMessage(message, true)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -79,22 +87,31 @@ export default function AccessPanel({ onMessage }: { onMessage: (message: string
             <h2>管理员账号</h2>
           </div>
         </div>
-        <div className="account-list">
-          {accounts.map((account) => (
-            <div className="account-row" key={account.id}>
-              <span>
-                <strong>{account.username}</strong>
-                <small>{roles.find((item) => item.value === account.role)?.label ?? account.role}</small>
-              </span>
-              <span className={`status-chip${account.disabled ? ' off' : ''}`}>
-                {account.disabled ? '已停用' : '启用中'}
-              </span>
-              <button className="mini-btn" type="button" onClick={() => void toggleAccount(account)}>
-                {account.disabled ? '启用' : '停用'}
-              </button>
-            </div>
-          ))}
-        </div>
+        {loadError ? (
+          <div className="admin-inline-error">
+            <p>{loadError}</p>
+            <button className="mini-btn" type="button" onClick={() => void load()}>重新读取</button>
+          </div>
+        ) : loading ? (
+          <div className="admin-loading" role="status">正在读取管理员列表…</div>
+        ) : (
+          <div className="account-list">
+            {accounts.map((account) => (
+              <div className="account-row" key={account.id}>
+                <span>
+                  <strong>{account.username}</strong>
+                  <small>{roles.find((item) => item.value === account.role)?.label ?? account.role}</small>
+                </span>
+                <span className={`status-chip${account.disabled ? ' off' : ''}`}>
+                  {account.disabled ? '已停用' : '启用中'}
+                </span>
+                <button className="mini-btn" type="button" onClick={() => void toggleAccount(account)}>
+                  {account.disabled ? '启用' : '停用'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="card admin-section-card">

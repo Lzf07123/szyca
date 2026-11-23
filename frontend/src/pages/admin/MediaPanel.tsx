@@ -26,13 +26,21 @@ export default function MediaPanel({
   onMessage: (message: string, error?: boolean) => void
 }) {
   const [assets, setAssets] = useState<Asset[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
 
   const load = async () => {
+    setLoading(true)
+    setLoadError('')
     try {
       const data = await api<{ assets: Asset[] }>('/api/admin/media')
       setAssets(data.assets)
     } catch (cause) {
-      onMessage((cause as Error).message, true)
+      const message = (cause as Error).message || '媒体资源读取失败'
+      setLoadError(message)
+      onMessage(message, true)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -61,43 +69,52 @@ export default function MediaPanel({
         </div>
         <button className="mini-btn" type="button" onClick={() => void load()}>刷新</button>
       </div>
-      <div className="media-list">
-        {assets.map((asset) => (
-          <div className="media-row" key={asset.id}>
-            {asset.mime.startsWith('image/') ? (
-              <img src={asset.path} alt="" loading="lazy" />
-            ) : (
-              <span className="media-placeholder" aria-hidden="true">FILE</span>
-            )}
-            <span className="media-main">
-              <strong>{asset.path.split('/').pop()}</strong>
-              <small>{asset.mime}{asset.width && asset.height ? ` · ${asset.width}×${asset.height}` : ''}</small>
-              <small className="media-checksum">SHA-256 {asset.checksum.slice(0, 16) || '—'}</small>
-            </span>
-            <span className="media-refs">
-              {asset.refs.length > 0
-                ? asset.refs.map((ref) => (
-                  <span key={`${ref.module}-${ref.resource_type}-${ref.resource_id}`}>
-                    {ref.resource_type} #{ref.resource_id}
-                  </span>
-                ))
-                : <span>未引用</span>}
-            </span>
-            {canWrite && (
-              <button
-                className="mini-btn danger"
-                type="button"
-                disabled={asset.refs.length > 0}
-                title={asset.refs.length > 0 ? '先解除所有引用' : '删除文件'}
-                onClick={() => void remove(asset)}
-              >
-                {asset.refs.length > 0 ? '使用中' : '删除'}
-              </button>
-            )}
-          </div>
-        ))}
-        {assets.length === 0 && <p className="muted">暂无媒体资源。</p>}
-      </div>
+      {loadError ? (
+        <div className="admin-inline-error">
+          <p>{loadError}</p>
+          <button className="mini-btn" type="button" onClick={() => void load()}>重新读取</button>
+        </div>
+      ) : loading ? (
+        <div className="admin-loading" role="status">正在读取媒体资源…</div>
+      ) : (
+        <div className="media-list">
+          {assets.map((asset) => (
+            <div className="media-row" key={asset.id}>
+              {asset.mime.startsWith('image/') ? (
+                <img src={asset.path} alt="" loading="lazy" />
+              ) : (
+                <span className="media-placeholder" aria-hidden="true">FILE</span>
+              )}
+              <span className="media-main">
+                <strong>{asset.path.split('/').pop()}</strong>
+                <small>{asset.mime}{asset.width && asset.height ? ` · ${asset.width}×${asset.height}` : ''}</small>
+                <small className="media-checksum">SHA-256 {asset.checksum.slice(0, 16) || '—'}</small>
+              </span>
+              <span className="media-refs">
+                {asset.refs.length > 0
+                  ? asset.refs.map((ref) => (
+                    <span key={`${ref.module}-${ref.resource_type}-${ref.resource_id}`}>
+                      {ref.resource_type} #{ref.resource_id}
+                    </span>
+                  ))
+                  : <span>未引用</span>}
+              </span>
+              {canWrite && (
+                <button
+                  className="mini-btn danger"
+                  type="button"
+                  disabled={asset.refs.length > 0}
+                  title={asset.refs.length > 0 ? '先解除所有引用' : '删除文件'}
+                  onClick={() => void remove(asset)}
+                >
+                  {asset.refs.length > 0 ? '使用中' : '删除'}
+                </button>
+              )}
+            </div>
+          ))}
+          {assets.length === 0 && <p className="muted">暂无媒体资源。</p>}
+        </div>
+      )}
     </div>
   )
 }

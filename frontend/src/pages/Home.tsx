@@ -1,7 +1,9 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
+import CustomCursor from '../components/CustomCursor'
 import PageMeta from '../components/PageMeta'
+import ScrambleText from '../components/ScrambleText'
 import {
   useSite,
   type HomeSection,
@@ -20,6 +22,45 @@ function canVisit(path: string | undefined, enabled: (key: SiteFeature['key']) =
 function splitTitle(title: string) {
   const parts = title.match(/[^，。！？]+[，。！？]?/g) ?? [title]
   return parts.length > 2 ? [parts.slice(0, -1).join(''), parts[parts.length - 1] || ''] : parts
+}
+
+function useHeroParallax(ref: RefObject<HTMLElement>) {
+  useEffect(() => {
+    const hero = ref.current
+    if (!hero) return
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reducedMotion) {
+      hero.style.setProperty('--hero-bg-shift', '0px')
+      hero.style.setProperty('--hero-mid-shift', '0px')
+      hero.style.setProperty('--hero-fg-shift', '0px')
+      return
+    }
+
+    let frame = 0
+    const update = () => {
+      frame = 0
+      const rect = hero.getBoundingClientRect()
+      const travel = Math.max(hero.offsetHeight, 1)
+      const progress = Math.min(1, Math.max(0, -rect.top / travel))
+      const strength = window.innerWidth <= 820 ? 0.42 : 1
+      hero.style.setProperty('--hero-bg-shift', `${progress * 44 * strength}px`)
+      hero.style.setProperty('--hero-mid-shift', `${progress * 24 * strength}px`)
+      hero.style.setProperty('--hero-fg-shift', `${progress * -14 * strength}px`)
+    }
+    const schedule = () => {
+      if (!frame) frame = window.requestAnimationFrame(update)
+    }
+
+    update()
+    window.addEventListener('scroll', schedule, { passive: true })
+    window.addEventListener('resize', schedule)
+    return () => {
+      window.removeEventListener('scroll', schedule)
+      window.removeEventListener('resize', schedule)
+      if (frame) window.cancelAnimationFrame(frame)
+    }
+  }, [ref])
 }
 
 function clockText(totalSeconds: number) {
@@ -149,10 +190,12 @@ function Hero({
   const title = config.title || '把好奇心，写进每一行代码'
   const lines = splitTitle(title)
   const uptimeIsLong = uptimeSeconds !== null && uptimeSeconds >= 30 * 86400
+  const heroRef = useRef<HTMLElement>(null)
+  useHeroParallax(heroRef)
 
   return (
-    <section className="home-hero cosmic-hero" aria-labelledby="hero-title">
-      <div className="hero-copy">
+    <section ref={heroRef} className="home-hero cosmic-hero" aria-labelledby="hero-title">
+      <div className="hero-copy" data-parallax="foreground">
         <div className="hero-kicker" data-reveal>
           <span className="signal-dot" aria-hidden="true" />
           <span>STPT · COMPUTER ASSOCIATION</span>
@@ -161,9 +204,16 @@ function Hero({
         <p className="boot-command" data-reveal style={{ '--reveal-delay': '80ms' } as CSSProperties}>
           <span aria-hidden="true">&gt;</span> boot nebula_os ... <b>[OK]</b><i className="terminal-cursor" aria-hidden="true">▊</i>
         </p>
-        <h1 id="hero-title" data-reveal style={{ '--reveal-delay': '140ms' } as CSSProperties}>
+        <h1
+          id="hero-title"
+          aria-label={title}
+          data-reveal
+          style={{ '--reveal-delay': '140ms' } as CSSProperties}
+        >
           {lines.map((line, index) => (
-            <span className="hero-title-line" key={`${line}-${index}`}>{line}</span>
+            <span className="hero-title-line" aria-hidden="true" key={`${line}-${index}`}>
+              <ScrambleText text={line} delay={index * 55} />
+            </span>
           ))}
         </h1>
         <p className="hero-subtitle" data-reveal style={{ '--reveal-delay': '220ms' } as CSSProperties}>
@@ -193,11 +243,19 @@ function Hero({
       </div>
 
       <div className="hero-visual" data-reveal style={{ '--reveal-delay': '180ms' } as CSSProperties} role="group" aria-label="NEBULA OS 启动终端">
-        {backgrounds[0] && <img className="hero-photo" src={backgrounds[0]} alt="" loading="eager" />}
-        <div className="hero-grid" aria-hidden="true" />
-        <span className="hero-coordinate hero-coordinate-a" aria-hidden="true">NET / 90 NODES</span>
-        <span className="hero-coordinate hero-coordinate-b" aria-hidden="true">GRID / 56 PX</span>
-        <div className="terminal-card">
+        {backgrounds[0] && (
+          <img
+            className="hero-photo"
+            data-parallax="background"
+            src={backgrounds[0]}
+            alt=""
+            loading="eager"
+          />
+        )}
+        <div className="hero-grid" data-parallax="background" aria-hidden="true" />
+        <span className="hero-coordinate hero-coordinate-a" data-parallax="midground" aria-hidden="true">NET / 90 NODES</span>
+        <span className="hero-coordinate hero-coordinate-b" data-parallax="midground" aria-hidden="true">GRID / 56 PX</span>
+        <div className="terminal-card" data-parallax="midground">
           <div className="terminal-bar">
             <i /><i /><i />
             <span>nebula_os://boot</span>
@@ -221,7 +279,7 @@ function Hero({
             <b>00:00:01</b>
           </div>
         </div>
-        <div className="signal-orbit" aria-hidden="true" />
+        <div className="signal-orbit" data-parallax="midground" aria-hidden="true" />
       </div>
     </section>
   )
@@ -484,6 +542,7 @@ export default function Home() {
 
   return (
     <>
+      <CustomCursor />
       <PageMeta
         title={site.brand.title || `${site.brand.name} · 数字深空`}
         description={site.brand.description}

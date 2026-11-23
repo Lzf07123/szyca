@@ -65,6 +65,13 @@ const blankCampaign: CampaignForm = {
   enabled: true,
 }
 
+const campaignStatusLabel: Record<Campaign['status'], string> = {
+  draft: '草稿',
+  active: '进行中',
+  paused: '已暂停',
+  ended: '已结束',
+}
+
 function localDateTime(value?: string) {
   if (!value) return ''
   const date = new Date(value)
@@ -99,6 +106,7 @@ export default function AdminLottery({
   const [form, setForm] = useState<CampaignForm>(blankCampaign)
   const [draws, setDraws] = useState<Draw[]>([])
   const [busy, setBusy] = useState(false)
+  const [loadError, setLoadError] = useState('')
   const [newPrize, setNewPrize] = useState({ name: '', total: 10, remaining: 10, weight: 1 })
   const selected = useMemo(
     () => campaigns.find((campaign) => campaign.id === selectedID),
@@ -106,6 +114,7 @@ export default function AdminLottery({
   )
 
   const load = async (keepSelection = true) => {
+    setLoadError('')
     try {
       const [featureData, campaignData] = await Promise.all([
         api<{ features: SiteFeature[] }>('/api/admin/platform/features'),
@@ -120,7 +129,9 @@ export default function AdminLottery({
       const campaign = campaignData.campaigns.find((item) => item.id === preferred)
       setForm(campaign ? campaignToForm(campaign) : blankCampaign)
     } catch (cause) {
-      onMessage((cause as Error).message, true)
+      const message = (cause as Error).message || '抽奖配置读取失败'
+      setLoadError(message)
+      onMessage(message, true)
     }
   }
 
@@ -293,26 +304,60 @@ export default function AdminLottery({
     URL.revokeObjectURL(link.href)
   }
 
-  if (!feature) return <div className="admin-loading" role="status">正在读取抽奖配置…</div>
+  const availablePrizeCount = selected?.prizes.filter((prize) => prize.enabled && prize.remaining > 0).length ?? 0
+  const pendingClaimCount = draws.filter((draw) => draw.status === 'won').length
+
+  if (!feature) {
+    return loadError ? (
+      <section className="card admin-section-card admin-page-error">
+        <p className="section-eyebrow">LOTTERY UNAVAILABLE</p>
+        <h2>抽奖配置暂时无法读取</h2>
+        <p className="error">{loadError}</p>
+        <button className="btn btn-primary" type="button" onClick={() => void load(false)}>
+          重新加载
+        </button>
+      </section>
+    ) : <div className="admin-loading" role="status">正在读取抽奖配置…</div>
+  }
 
   return (
     <div className="admin-stack lottery-admin">
       <section className="card admin-section-card lottery-global">
-        <div>
-          <p className="section-eyebrow">GLOBAL SWITCH</p>
-          <h2>抽奖总开关</h2>
-          <p className="muted">关闭后公开入口、抽奖页和公开接口立即失效；后台配置仍保留。</p>
+        <div className="lottery-global-head">
+          <div>
+            <p className="section-eyebrow">LOTTERY OPERATIONS</p>
+            <h2>抽奖总开关</h2>
+            <p className="muted">先确认活动与库存，再开放公开入口；关闭总开关不会删除配置或抽奖记录。</p>
+          </div>
+          <button
+            className={`switch-large${feature.enabled ? ' on' : ''}`}
+            type="button"
+            aria-pressed={feature.enabled}
+            disabled={busy}
+            onClick={() => void toggleGlobal()}
+          >
+            <span aria-hidden="true" />
+            {feature.enabled ? '公开入口已开启' : '公开入口已关闭'}
+          </button>
         </div>
-        <button
-          className={`switch-large${feature.enabled ? ' on' : ''}`}
-          type="button"
-          aria-pressed={feature.enabled}
-          disabled={busy}
-          onClick={() => void toggleGlobal()}
-        >
-          <span aria-hidden="true" />
-          {feature.enabled ? '已开启' : '默认关闭'}
-        </button>
+        <div className="lottery-status-grid" aria-label="抽奖运营摘要">
+          <div>
+            <span>公开入口</span>
+            <strong>{feature.enabled ? '已开启' : '已关闭'}</strong>
+          </div>
+          <div>
+            <span>当前活动</span>
+            <strong>{form.id ? campaignStatusLabel[form.status] : '未创建'}</strong>
+          </div>
+          <div>
+            <span>可抽奖品</span>
+            <strong>{availablePrizeCount} 种</strong>
+          </div>
+          <div>
+            <span>待核销</span>
+            <strong>{pendingClaimCount} 份</strong>
+          </div>
+        </div>
       </section>
 
       <section className="card admin-section-card">
@@ -420,13 +465,13 @@ export default function AdminLottery({
             {busy ? '保存中…' : '保存活动'}
           </button>
           {form.id > 0 && form.status !== 'paused' && (
-            <button className="btn" type="button" onClick={() => void updateStatus('paused')}>暂停活动</button>
+            <button className="btn" type="button" disabled={busy} onClick={() => void updateStatus('paused')}>暂停活动</button>
           )}
           {form.id > 0 && form.status !== 'active' && (
-            <button className="btn btn-secondary" type="button" onClick={() => void updateStatus('active')}>恢复进行</button>
+            <button className="btn btn-secondary" type="button" disabled={busy} onClick={() => void updateStatus('active')}>恢复进行</button>
           )}
           {form.id > 0 && form.status !== 'ended' && (
-            <button className="btn" type="button" onClick={() => void updateStatus('ended')}>结束活动</button>
+            <button className="btn btn-danger-outline" type="button" disabled={busy} onClick={() => void updateStatus('ended')}>结束活动</button>
           )}
         </div>
       </section>

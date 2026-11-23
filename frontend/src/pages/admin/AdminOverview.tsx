@@ -26,6 +26,15 @@ interface AuditEntry {
   created_at: string
 }
 
+type OverviewDestination = 'control' | 'questions' | 'site' | 'lottery'
+
+export interface OverviewAction {
+  tab: OverviewDestination
+  label: string
+  description: string
+  meta: string
+}
+
 interface AdminOverviewProps {
   data: AdminOverviewData
   quizState: 'start' | 'stop'
@@ -33,6 +42,9 @@ interface AdminOverviewProps {
   loading: boolean
   updatedAt: Date | null
   onRefresh: () => void
+  quickActions: OverviewAction[]
+  onNavigate: (tab: OverviewDestination) => void
+  onExportScores?: () => void
 }
 
 type DeltaKey = 'users' | 'participants' | 'attempts' | 'online'
@@ -44,6 +56,9 @@ export default function AdminOverview({
   loading,
   updatedAt,
   onRefresh,
+  quickActions,
+  onNavigate,
+  onExportScores,
 }: AdminOverviewProps) {
   const previous = useRef<AdminOverviewData['overview'] | null>(null)
   const [deltas, setDeltas] = useState<Record<DeltaKey, number>>({
@@ -130,15 +145,57 @@ export default function AdminOverview({
           <h2 id="overview-title">控制台概览 <span>WORKBENCH</span></h2>
         </div>
         <div className="workbench-actions">
-          <span className="workbench-live" role="status" aria-live="polite">
+          <span
+            className="workbench-live"
+            title="概览数据每 10 秒自动刷新"
+            aria-label={updatedAt
+              ? `概览数据每 10 秒自动刷新，最近同步于 ${updatedAt.toLocaleTimeString('zh-CN', { hour12: false })}`
+              : '概览数据每 10 秒自动刷新，正在等待首次同步'}
+          >
             <i aria-hidden="true" />
-            {loading ? '正在同步…' : `实时 · ${updatedAt?.toLocaleTimeString('zh-CN', { hour12: false }) || '待同步'}`}
+            {loading
+              ? '正在自动同步…'
+              : `自动刷新 · ${updatedAt?.toLocaleTimeString('zh-CN', { hour12: false }) || '待同步'}`}
           </span>
           <button className="mini-btn" type="button" disabled={loading} onClick={onRefresh}>
             {loading ? '刷新中…' : '刷新'}
           </button>
+          {onExportScores && (
+            <button className="mini-btn" type="button" onClick={onExportScores}>
+              导出成绩
+            </button>
+          )}
         </div>
       </div>
+
+      {quickActions.length > 0 && (
+        <section className="admin-quick-actions" aria-labelledby="quick-actions-title">
+          <div className="admin-quick-head">
+            <h3 id="quick-actions-title">现在该做什么</h3>
+            <span>按当前权限显示可执行入口</span>
+          </div>
+          <div className="admin-quick-grid">
+            {quickActions.map((action, index) => (
+              <button
+                key={action.tab}
+                className="admin-quick-action"
+                type="button"
+                onClick={() => onNavigate(action.tab)}
+              >
+                <span className="admin-quick-index" aria-hidden="true">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <strong>{action.label}</strong>
+                <small>{action.description}</small>
+                <span className="admin-quick-meta">
+                  {action.meta}
+                  <b aria-hidden="true">进入 →</b>
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="stat-grid">
         {stats.map((stat) => {
