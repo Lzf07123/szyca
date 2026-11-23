@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState, type ChangeEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api, clearCSRFToken, csrfHeader, setCSRFToken } from '../api/client'
 import { setFavicon, useSite } from '../api/site'
 import { usePageMeta } from '../components/PageMeta'
@@ -76,19 +77,38 @@ const roleLabel: Record<AdminAccount['role'], string> = {
   data_viewer: '数据查看',
 }
 
+function isAdminTab(value: string | null): value is AdminTab {
+  return ADMIN_TABS.some((item) => item.key === value)
+}
+
 export default function Admin() {
   usePageMeta('后台管理 · 计算机协会', '计算机协会官网后台管理。')
   const { reload: reloadSite } = useSite()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [username, setUsername] = useState('owner')
   const [password, setPassword] = useState('')
   const [account, setAccount] = useState<AdminAccount | null>(null)
   const [authChecking, setAuthChecking] = useState(true)
+  const [authBusy, setAuthBusy] = useState(false)
   const [ov, setOv] = useState<OvResp | null>(null)
-  const [tab, setTab] = useState<AdminTab>('overview')
+  const [overviewLoading, setOverviewLoading] = useState(false)
+  const [overviewError, setOverviewError] = useState('')
+  const [overviewUpdatedAt, setOverviewUpdatedAt] = useState<Date | null>(null)
+  const [tab, setTab] = useState<AdminTab>(() => {
+    const requested = searchParams.get('tab')
+    return isAdminTab(requested) ? requested : 'overview'
+  })
   const [wipe, setWipe] = useState<{ target: 'questions' | 'bgs'; step: 'ask' | 'final' } | null>(null)
   const [qState, setQState] = useState<'start' | 'stop'>('stop')
+  const [qBusy, setQBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  const [dataErrors, setDataErrors] = useState<Record<string, string>>({})
+  const [siteDirty, setSiteDirty] = useState(false)
   const [questions, setQuestions] = useState<Question[]>([])
+  const [questionsLoading, setQuestionsLoading] = useState(true)
+  const [questionQuery, setQuestionQuery] = useState('')
+  const [questionDifficulty, setQuestionDifficulty] = useState('全部')
+  const [questionStatus, setQuestionStatus] = useState<'all' | 'active' | 'inactive'>('all')
   const [content, setContent] = useState('')
   const [options, setOptions] = useState('')
   const [answerIdx, setAnswerIdx] = useState(0)
@@ -101,12 +121,43 @@ export default function Admin() {
   const [qrNewTitle, setQrNewTitle] = useState('')
   const [qrTitles, setQrTitles] = useState<Record<number, string>>({})
   const [logo, setLogo] = useState('')
+  const [announcement, setAnnouncement] = useState('')
+  const [announcing, setAnnouncing] = useState(false)
   const verified = account !== null
 
   const can = useCallback((permission: string) => {
     if (!account) return false
     return account.capabilities.includes('*') || account.capabilities.includes(permission)
   }, [account])
+
+  const selectTab = useCallback((next: AdminTab) => {
+    if (tab === 'site' && next !== 'site' && siteDirty && !window.confirm('站点内容还有未保存修改。离开后这些修改将丢失，确定继续吗？')) {
+      return
+    }
+    setTab(next)
+    setSearchParams((current) => {
+      const updated = new URLSearchParams(current)
+      if (next === 'overview') updated.delete('tab')
+      else updated.set('tab', next)
+      return updated
+    }, { replace: true })
+  }, [setSearchParams, siteDirty, tab])
+
+  const reportLoadFailure = useCallback((scope: string, cause: unknown) => {
+    setDataErrors((current) => ({
+      ...current,
+      [scope]: (cause as Error).message || '请求失败',
+    }))
+  }, [])
+
+  const clearLoadFailure = useCallback((scope: string) => {
+    setDataErrors((current) => {
+      if (!(scope in current)) return current
+      const next = { ...current }
+      delete next[scope]
+      return next
+    })
+  }, [])
 
   const checkSession = useCallback(async () => {
     try {
@@ -131,7 +182,29 @@ export default function Admin() {
     void checkSession()
   }, [checkSession])
 
+  useEffect(() => {
+    const requested = searchParams.get('tab')
+    if (!isAdminTab(requested) || requested === tab) return
+    setTab(requested)
+  }, [searchParams, tab])
+
+  useEffect(() => {
+    if (!wipe) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setWipe(null)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [wipe])
+
   const submitLogin = async () => {
+    if (authBusy) return
+    setAuthBusy(true)
     setMsg('')
     try {
       const data = await api<{ account: AdminAccount; csrf_token: string }>('/api/admin/auth/login', {
@@ -143,10 +216,15 @@ export default function Admin() {
       setPassword('')
     } catch (cause) {
       setMsg(`✘ ${(cause as Error).message}`)
+    } finally {
+      setAuthBusy(false)
     }
   }
 
   const logout = async () => {
+    if (siteDirty && !window.confirm('站点内容还有未保存修改。退出登录会丢失这些修改，确定继续吗？')) {
+      return
+    }
     try {
       await api('/api/admin/auth/logout', { method: 'POST' })
     } catch {
@@ -155,8 +233,28 @@ export default function Admin() {
     clearCSRFToken()
     setAccount(null)
     setOv(null)
+    setOverviewError('')
+    setOverviewUpdatedAt(null)
+    setDataErrors({})
     setPassword('')
   }
+
+  const loadOverview = useCallback(async () => {
+    if (!verified || !can('site.read')) return
+    setOverviewLoading(true)
+    try {
+      const data = await api<OvResp>('/api/admin/overview')
+      setOv(data)
+      setOverviewError('')
+      setOverviewUpdatedAt(new Date())
+      clearLoadFailure('overview')
+    } catch (cause) {
+      setOverviewError((cause as Error).message || '概览读取失败')
+      reportLoadFailure('overview', cause)
+    } finally {
+      setOverviewLoading(false)
+    }
+  }, [clearLoadFailure, can, reportLoadFailure, verified])
 
   // 答题状态 5s 轮询（控制面板提示准确）
   useEffect(() => {
@@ -171,42 +269,60 @@ export default function Admin() {
     return () => clearInterval(t)
   }, [verified, can])
 
-  const switchState = async (next: 'start' | 'stop') => {
-    setQState(next)
-    await act('/api/admin/quiz-state', { state: next }, next === 'start' ? '答题已开始，参与者可进入答题' : '答题已结束，正在答题者将无法提交')
-  }
-
   // 概览 10s 自动刷新
   useEffect(() => {
     if (!verified || !can('site.read')) return
-    void api<OvResp>('/api/admin/overview').then(setOv).catch(() => undefined)
-    const t = window.setInterval(() => {
-      void api<OvResp>('/api/admin/overview')
-        .then(setOv)
-        .catch(() => undefined)
-    }, 10000)
+    void loadOverview()
+    const t = window.setInterval(() => void loadOverview(), 10000)
     return () => clearInterval(t)
-  }, [verified, can])
+  }, [verified, can, loadOverview])
+
+  const switchState = async (next: 'start' | 'stop') => {
+    if (qBusy) return
+    if (next === 'stop' && !window.confirm('结束答题后，所有尚未提交的答案将被拒绝。确定现在结束吗？')) {
+      return
+    }
+    setQBusy(true)
+    setMsg('')
+    try {
+      await api('/api/admin/quiz-state', {
+        method: 'POST',
+        body: JSON.stringify({ state: next }),
+      })
+      setQState(next)
+      setMsg(next === 'start' ? '✔ 答题已开始，参与者可进入答题' : '✔ 答题已结束，未提交答案已停止接收')
+      void loadOverview()
+    } catch (cause) {
+      setMsg(`✘ ${(cause as Error).message}`)
+    } finally {
+      setQBusy(false)
+    }
+  }
 
   const reload = useCallback(async () => {
     if (!can('quiz.read')) return
+    setQuestionsLoading(true)
     try {
       const d = await api<{ questions: Question[] }>('/api/admin/questions')
       setQuestions(d.questions)
-    } catch {
-      /* 口令错误等，忽略 */
+      clearLoadFailure('questions')
+    } catch (cause) {
+      reportLoadFailure('questions', cause)
+    } finally {
+      setQuestionsLoading(false)
     }
-  }, [can])
+  }, [can, clearLoadFailure, reportLoadFailure])
 
   const reloadBgs = useCallback(async () => {
     if (!can('media.read')) return
     try {
       const d = await api<{ backgrounds: Bg[] }>('/api/admin/backgrounds')
       setBgs(d.backgrounds || [])
-    } catch {
-      /* 忽略 */
+      clearLoadFailure('backgrounds')
+    } catch (cause) {
+      reportLoadFailure('backgrounds', cause)
     }
-  }, [can])
+  }, [can, clearLoadFailure, reportLoadFailure])
 
   const reloadQrs = useCallback(async () => {
     if (!can('site.read')) return
@@ -215,40 +331,48 @@ export default function Admin() {
       const list = d.qrcodes || []
       setQrs(list)
       setQrTitles(Object.fromEntries(list.map((q) => [q.id, q.title])))
-    } catch {
-      /* 忽略 */
+      clearLoadFailure('qrcodes')
+    } catch (cause) {
+      reportLoadFailure('qrcodes', cause)
     }
-  }, [can])
+  }, [can, clearLoadFailure, reportLoadFailure])
 
   const reloadLogo = useCallback(async () => {
     if (!can('site.read')) return
     try {
       const d = await api<{ logo_url: string }>('/api/admin/logo')
       setLogo(d.logo_url || '')
-    } catch {
-      /* 忽略 */
+      clearLoadFailure('logo')
+    } catch (cause) {
+      reportLoadFailure('logo', cause)
     }
-  }, [can])
+  }, [can, clearLoadFailure, reportLoadFailure])
 
   const reloadFooter = useCallback(async () => {
     if (!can('site.read')) return
     try {
       const d = await api<{ footer: { owner: string; license: string; icp: string; icp_icon: string; police: string; police_icon: string } }>('/api/admin/footer')
       setFooter(d.footer)
-    } catch {
-      /* 忽略 */
+      clearLoadFailure('footer')
+    } catch (cause) {
+      reportLoadFailure('footer', cause)
     }
-  }, [can])
+  }, [can, clearLoadFailure, reportLoadFailure])
+
+  const reloadAll = useCallback(async () => {
+    await Promise.all([
+      loadOverview(),
+      reload(),
+      reloadBgs(),
+      reloadFooter(),
+      reloadQrs(),
+      reloadLogo(),
+    ])
+  }, [loadOverview, reload, reloadBgs, reloadFooter, reloadLogo, reloadQrs])
 
   useEffect(() => {
-    if (verified) {
-      void reload()
-      void reloadBgs()
-      void reloadFooter()
-      void reloadQrs()
-      void reloadLogo()
-    }
-  }, [verified, reload, reloadBgs, reloadFooter, reloadQrs, reloadLogo])
+    if (verified) void reloadAll()
+  }, [verified, reloadAll])
 
   // 上传到 /uploads 并返回 URL（二维码换图、备案图标等）
   const uploadImage = async (f: File): Promise<string> => {
@@ -319,6 +443,7 @@ export default function Admin() {
     void act(`/api/admin/backgrounds/${b.id}/active`, { active: !b.active }, b.active ? '背景已停用' : '背景已启用')
 
   const delBg = async (b: Bg) => {
+    if (!window.confirm(`确定删除背景图「${b.file_path.split('/').pop() || b.id}」？此操作不可恢复。`)) return
     try {
       await api(`/api/admin/backgrounds/${b.id}`, { method: 'DELETE' })
       setMsg('✔ 背景已删除')
@@ -392,6 +517,7 @@ export default function Admin() {
   }
 
   const delQr = async (q: Qr) => {
+    if (!window.confirm(`确定删除二维码「${q.title || `#${q.id}`}」？此操作不可恢复。`)) return
     try {
       await api(`/api/admin/qrcodes/${q.id}`, { method: 'DELETE' })
       setMsg('✔ 二维码已删除')
@@ -497,6 +623,35 @@ export default function Admin() {
     }
   }
 
+  async function broadcastAnnouncement() {
+    const content = announcement.trim()
+    if (!content || announcing) return
+    setAnnouncing(true)
+    setMsg('')
+    try {
+      await api('/api/admin/announce', {
+        method: 'POST',
+        body: JSON.stringify({ content, type: 'info' }),
+      })
+      setAnnouncement('')
+      setMsg('✔ 公告已广播到答题页与现场大屏')
+    } catch (cause) {
+      setMsg(`✘ ${(cause as Error).message}`)
+    } finally {
+      setAnnouncing(false)
+    }
+  }
+
+  const filteredQuestions = useMemo(() => {
+    const query = questionQuery.trim().toLocaleLowerCase('zh-CN')
+    return questions.filter((question) => {
+      if (questionDifficulty !== '全部' && question.difficulty !== questionDifficulty) return false
+      if (questionStatus === 'active' && !question.active) return false
+      if (questionStatus === 'inactive' && question.active) return false
+      return !query || question.content.toLocaleLowerCase('zh-CN').includes(query)
+    })
+  }, [questionDifficulty, questionQuery, questionStatus, questions])
+
   if (authChecking) {
     return (
       <section className="admin">
@@ -541,9 +696,11 @@ export default function Admin() {
                 minLength={8}
               />
             </label>
-            <button className="btn btn-primary" type="submit">登录</button>
+            <button className="btn btn-primary" type="submit" disabled={authBusy}>
+              {authBusy ? '正在登录…' : '登录'}
+            </button>
           </form>
-          {msg && <p className="error" role="alert">{msg}</p>}
+          {msg && <p className="error" role="alert" aria-live="assertive">{msg}</p>}
         </div>
       </section>
     )
@@ -561,23 +718,72 @@ export default function Admin() {
             <h2>后台管理</h2>
             <p className="admin-identity">{account.username} · {roleLabel[account.role]}</p>
           </div>
-          <button className="mini-btn" onClick={() => void logout()}>
+          <button className="mini-btn" type="button" onClick={() => void logout()}>
             退出登录
           </button>
         </div>
-        {msg && <p className={`flash${msg.startsWith('✔') ? '' : ' error'}`}>{msg}</p>}
+        {msg && (
+          <div
+            className={`admin-feedback${msg.startsWith('✔') ? ' ok' : ' error'}`}
+            role={msg.startsWith('✔') ? 'status' : 'alert'}
+            aria-live={msg.startsWith('✔') ? 'polite' : 'assertive'}
+          >
+            <span>{msg}</span>
+            <button type="button" aria-label="关闭操作提示" onClick={() => setMsg('')}>×</button>
+          </div>
+        )}
       </div>
 
-      <nav className="admin-tabs">
+      <nav className="admin-tabs" aria-label="后台功能">
         {allowedTabs.map((t) => (
-          <button key={t.key} className={`admin-tab${visibleTab === t.key ? ' on' : ''}`} onClick={() => setTab(t.key)}>
+          <button
+            key={t.key}
+            type="button"
+            className={`admin-tab${visibleTab === t.key ? ' on' : ''}`}
+            aria-current={visibleTab === t.key ? 'page' : undefined}
+            onClick={() => selectTab(t.key)}
+          >
             {t.label}
           </button>
         ))}
       </nav>
 
+      {Object.keys(dataErrors).length > 0 && (
+        <div className="admin-sync-warning" role="alert">
+          <span>
+            部分后台数据没有同步成功：{Object.values(dataErrors).join('；')}
+          </span>
+          <button className="mini-btn" type="button" onClick={() => void reloadAll()}>
+            重新同步
+          </button>
+        </div>
+      )}
+
       {visibleTab === 'overview' && ov && (
-        <AdminOverview data={ov} quizState={qState} canReadAudit={can('audit.read')} />
+        <AdminOverview
+          data={ov}
+          quizState={qState}
+          canReadAudit={can('audit.read')}
+          loading={overviewLoading}
+          updatedAt={overviewUpdatedAt}
+          onRefresh={() => void loadOverview()}
+        />
+      )}
+
+      {visibleTab === 'overview' && !ov && (
+        <div className={`card admin-overview-state${overviewError ? ' error' : ''}`}>
+          {overviewError ? (
+            <>
+              <h3>控制台概览暂时不可用</h3>
+              <p className="error" role="alert">{overviewError}</p>
+              <button className="btn btn-primary" type="button" onClick={() => void loadOverview()}>
+                重新加载
+              </button>
+            </>
+          ) : (
+            <div className="admin-loading" role="status">正在同步控制台数据…</div>
+          )}
+        </div>
       )}
 
       {visibleTab === 'site' && (
@@ -586,6 +792,7 @@ export default function Admin() {
           canManageLottery={can('lottery.configure')}
           onMessage={(message, error) => setMsg(`${error ? '✘' : '✔'} ${message}`)}
           onSaved={reloadSite}
+          onDirtyChange={setSiteDirty}
         />
       )}
 
@@ -613,7 +820,7 @@ export default function Admin() {
           <div className="admin-grid">
           <div className="admin-panel">
             <h3>答题控制</h3>
-            <p className="muted">
+            <p className="muted" role="status" aria-live="polite">
               当前状态：
               <b className={qState === 'start' ? 'state-live' : 'state-idle'}>
                 {qState === 'start' ? '答题进行中' : '答题未开始'}
@@ -621,14 +828,16 @@ export default function Admin() {
             </p>
             <button
               className="btn btn-accent"
-              disabled={qState === 'start'}
+              type="button"
+              disabled={qState === 'start' || qBusy}
               onClick={() => void switchState('start')}
             >
-              开始答题
+              {qBusy ? '处理中…' : '开始答题'}
             </button>
             <button
               className="btn"
-              disabled={qState === 'stop'}
+              type="button"
+              disabled={qState === 'stop' || qBusy}
               onClick={() => void switchState('stop')}
             >
               结束答题
@@ -644,11 +853,25 @@ export default function Admin() {
 
           <div className="admin-panel">
             <h3>公告</h3>
+            <p className="muted">公告会同时推送到答题页与现场大屏，最多 200 字。</p>
+            <label className="field">
+              公告内容
+              <textarea
+                rows={3}
+                maxLength={200}
+                value={announcement}
+                placeholder="如：本轮答题将在 5 分钟后结束，请抓紧提交。"
+                onChange={(event) => setAnnouncement(event.target.value)}
+              />
+            </label>
+            <p className="field-hint">{announcement.length} / 200</p>
             <button
               className="btn"
-              onClick={() => void act('/api/admin/announce', { content: prompt('公告内容') || '欢迎加入计算机协会！', type: 'info' }, '公告已广播')}
+              type="button"
+              disabled={!announcement.trim() || announcing}
+              onClick={() => void broadcastAnnouncement()}
             >
-              广播公告
+              {announcing ? '正在广播…' : '广播公告'}
             </button>
           </div>
 
@@ -904,9 +1127,12 @@ export default function Admin() {
       {visibleTab === 'questions' && (
       <div className="card">
         <div className="qbank-head">
-          <h3>题库（{questions.length}）</h3>
+          <div>
+            <h3>题库（{questions.length}）</h3>
+            <p className="muted">启用中 {questions.filter((question) => question.active).length} 题 · 当前筛选 {filteredQuestions.length} 题</p>
+          </div>
           {can('quiz.write') && (
-            <button className="mini-btn danger" onClick={() => setWipe({ target: 'questions', step: 'ask' })}>
+            <button className="mini-btn danger" type="button" onClick={() => setWipe({ target: 'questions', step: 'ask' })}>
               一键清空题库
             </button>
           )}
@@ -918,7 +1144,7 @@ export default function Admin() {
               CSV 列：题目, 选项A~F, 正确答案(A-F), 难度, 分值。题目以「示例」开头的行自动跳过。
             </p>
             <div className="field-actions">
-              <button className="btn" onClick={() => void download('/api/admin/questions/template', 'questions-template.csv')}>
+              <button className="btn" type="button" onClick={() => void download('/api/admin/questions/template', 'questions-template.csv')}>
                 下载模板
               </button>
               <label className="field">
@@ -967,6 +1193,7 @@ export default function Admin() {
             </label>
             <button
               className="btn btn-primary"
+              type="button"
               onClick={() =>
                 void act(
                   '/api/admin/questions',
@@ -981,24 +1208,64 @@ export default function Admin() {
 
           <div className="admin-panel">
             <h3>题目列表</h3>
-            <ul className="qlist">
-              {questions.map((q) => (
-                <li key={q.id}>
-                  <span className={q.active ? '' : 'muted'}>
-                    <i className={`qdiff d-${q.difficulty}`}>{q.difficulty}</i> #{q.id} {q.content.slice(0, 16)}
-                    {q.content.length > 16 ? '…' : ''}
-                  </span>
-                  {can('quiz.write') && (
-                    <button
-                      className="mini-btn"
-                      onClick={() => void act(`/api/admin/questions/${q.id}/active`, { active: !q.active }, q.active ? '已停用' : '已启用')}
-                    >
-                      {q.active ? '停用' : '启用'}
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <div className="question-filters">
+              <label className="field">
+                搜索题目
+                <input
+                  type="search"
+                  value={questionQuery}
+                  placeholder="输入题目关键字"
+                  onChange={(event) => setQuestionQuery(event.target.value)}
+                />
+              </label>
+              <label className="field">
+                难度
+                <select value={questionDifficulty} onChange={(event) => setQuestionDifficulty(event.target.value)}>
+                  {['全部', '容易', '简单', '困难'].map((value) => (
+                    <option key={value} value={value}>{value}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                状态
+                <select
+                  value={questionStatus}
+                  onChange={(event) => setQuestionStatus(event.target.value as typeof questionStatus)}
+                >
+                  <option value="all">全部</option>
+                  <option value="active">启用中</option>
+                  <option value="inactive">已停用</option>
+                </select>
+              </label>
+            </div>
+            {questionsLoading ? (
+              <div className="admin-loading" role="status">正在读取题库…</div>
+            ) : (
+              <ul className="qlist">
+                {filteredQuestions.map((q) => (
+                  <li key={q.id} title={q.content}>
+                    <span className={q.active ? '' : 'muted'}>
+                      <i className={`qdiff d-${q.difficulty}`}>{q.difficulty}</i> #{q.id} {q.content.slice(0, 16)}
+                      {q.content.length > 16 ? '…' : ''}
+                    </span>
+                    {can('quiz.write') && (
+                      <button
+                        className="mini-btn"
+                        type="button"
+                        onClick={() => void act(`/api/admin/questions/${q.id}/active`, { active: !q.active }, q.active ? '已停用' : '已启用')}
+                      >
+                        {q.active ? '停用' : '启用'}
+                      </button>
+                    )}
+                  </li>
+                ))}
+                {filteredQuestions.length === 0 && (
+                  <li className="muted">
+                    {questions.length === 0 ? '题库为空，请先导入或新增题目。' : '没有符合当前筛选条件的题目。'}
+                  </li>
+                )}
+              </ul>
+            )}
           </div>
         </div>
       </div>
@@ -1006,10 +1273,16 @@ export default function Admin() {
 
       {wipe && (
         <div className="modal-veil" onClick={() => setWipe(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-confirm-title"
+            onClick={(e) => e.stopPropagation()}
+          >
             {wipe.step === 'ask' ? (
               <>
-                <h3>{wipe.target === 'questions' ? '清空全部题库？' : '清空全部背景图？'}</h3>
+                <h3 id="admin-confirm-title">{wipe.target === 'questions' ? '清空全部题库？' : '清空全部背景图？'}</h3>
                 <ul className="side-effects">
                   {wipe.target === 'questions' ? (
                     <>
@@ -1026,19 +1299,19 @@ export default function Admin() {
                   <li>此操作<b>不可恢复</b></li>
                 </ul>
                 <div className="modal-actions">
-                  <button className="btn" onClick={() => setWipe(null)}>取消</button>
-                  <button className="btn btn-primary" onClick={() => setWipe({ ...wipe, step: 'final' })}>继续</button>
+                  <button className="btn" type="button" autoFocus onClick={() => setWipe(null)}>取消</button>
+                  <button className="btn btn-primary" type="button" onClick={() => setWipe({ ...wipe, step: 'final' })}>继续</button>
                 </div>
               </>
             ) : (
               <>
-                <h3>最后确认</h3>
+                <h3 id="admin-confirm-title">最后确认</h3>
                 <p className="muted">
                   再次确认：确定清空全部{wipe.target === 'questions' ? '题目' : '背景图'}吗？此操作不可恢复。
                 </p>
                 <div className="modal-actions">
-                  <button className="btn" onClick={() => setWipe({ ...wipe, step: 'ask' })}>返回</button>
-                  <button className="btn btn-primary" onClick={() => void confirmWipe()}>确认清空</button>
+                  <button className="btn" type="button" autoFocus onClick={() => setWipe({ ...wipe, step: 'ask' })}>返回</button>
+                  <button className="btn btn-primary" type="button" onClick={() => void confirmWipe()}>确认清空</button>
                 </div>
               </>
             )}

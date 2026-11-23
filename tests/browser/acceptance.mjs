@@ -253,7 +253,7 @@ async function assertFramedChrome(page, label) {
   expect(chrome.header.radius <= 1 && chrome.footer.radius <= 1, `${label}: chrome uses floating-card corners`)
   expect(chrome.header.height <= 72, `${label}: header is too tall (${chrome.header.height}px)`)
   expect(chrome.header.borderWidth <= 1 && chrome.footer.borderWidth <= 1, `${label}: chrome has a hard divider`)
-  expect(chrome.header.backdrop.includes('blur'), `${label}: header is missing frosted blur`)
+  expect(chrome.header.backdrop === 'none', `${label}: header must not blur the page background`)
   expect(chrome.footer.backdrop.includes('blur'), `${label}: footer is missing frosted blur`)
   const maxFooterHeight = chrome.viewport <= 820 ? 170 : chrome.viewport <= 1023 ? 118 : 96
   expect(chrome.footer.height <= maxFooterHeight, `${label}: footer is too tall (${chrome.footer.height}px)`)

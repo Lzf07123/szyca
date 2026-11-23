@@ -94,8 +94,13 @@ function savePending(q: PendingAnswer[]) {
 
 export function pushPending(a: PendingAnswer) {
   const q = loadPending()
+  if (q.some((item) => item.request_id === a.request_id)) return
   q.push(a)
   savePending(q)
+}
+
+export function removePending(requestID: string) {
+  savePending(loadPending().filter((item) => item.request_id !== requestID))
 }
 
 export async function flushPending(): Promise<number> {

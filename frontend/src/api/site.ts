@@ -124,6 +124,7 @@ export function SiteProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState('')
 
   const reload = useCallback(async () => {
+    setLoading(true)
     try {
       const next = await api<SiteData>('/api/site')
       setSite(next)

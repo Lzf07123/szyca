@@ -84,7 +84,15 @@ def main() -> None:
     ], versions
 
     before = data_counts()
-    subprocess.run(["docker", "restart", "szyca"], cwd=ROOT, check=True, capture_output=True)
+    container_id = subprocess.run(
+        [*COMPOSE, "ps", "-q", "szyca"],
+        cwd=ROOT,
+        check=True,
+        text=True,
+        capture_output=True,
+    ).stdout.strip()
+    assert container_id, "compose service container not found"
+    subprocess.run(["docker", "restart", container_id], cwd=ROOT, check=True, capture_output=True)
     wait_ready()
 
     after = data_counts()

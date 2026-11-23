@@ -69,8 +69,9 @@ function FeatureGate({
 
 function Layout() {
   const { pathname } = useLocation()
-  const { site, error } = useSite()
+  const { site, error, loading, reload } = useSite()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [headerScrolled, setHeaderScrolled] = useState(() => window.scrollY > 8)
   const mainRef = useRef<HTMLElement>(null)
   const navToggleRef = useRef<HTMLButtonElement>(null)
   const fullscreen = pathname === '/screen'
@@ -79,10 +80,29 @@ function Layout() {
 
   useEffect(() => {
     setMenuOpen(false)
+    setHeaderScrolled(false)
     window.scrollTo({ top: 0, behavior: 'auto' })
     const timer = window.setTimeout(() => mainRef.current?.focus({ preventScroll: true }), 0)
     return () => window.clearTimeout(timer)
   }, [pathname])
+
+  useEffect(() => {
+    let frame = 0
+    const sync = () => {
+      frame = 0
+      setHeaderScrolled(window.scrollY > 8)
+    }
+    const onScroll = () => {
+      if (frame) return
+      frame = window.requestAnimationFrame(sync)
+    }
+    sync()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      if (frame) window.cancelAnimationFrame(frame)
+    }
+  }, [])
 
   useEffect(() => {
     if (!menuOpen) return
@@ -108,7 +128,7 @@ function Layout() {
       <CosmicBackdrop />
       <a className="skip-link" href="#main-content">跳到主要内容</a>
       {!fullscreen && (
-        <header className="topbar public-topbar">
+        <header className={`topbar public-topbar${headerScrolled ? ' is-scrolled' : ''}`}>
           <Link className={`logo${site.brand.logo_url ? ' has-img' : ''}`} to="/" aria-label={`${site.brand.name}首页`}>
             <BrandMark variant="header" />
             <span className="logo-copy">
@@ -145,7 +165,10 @@ function Layout() {
       )}
       {error && !fullscreen && (
         <div className="site-degraded" role="status">
-          站点配置暂时不可用，正在显示静态内容。
+          <span>站点配置暂时不可用，正在显示静态内容。</span>
+          <button type="button" disabled={loading} onClick={() => void reload()}>
+            {loading ? '正在重试…' : '重新连接'}
+          </button>
         </div>
       )}
       <main id="main-content" ref={mainRef} className="page" tabIndex={-1}>
