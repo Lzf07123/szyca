@@ -102,7 +102,21 @@ func main() {
 		}
 		galleryProvider = provider
 	}
-	siteSvc = site.NewWithProviders(st.Pool(), cfg.Title, galleryProvider, qrcodeProvider)
+	lotteryValue, ok := runtime.Service("lottery")
+	if !ok {
+		log.Fatal("lottery module service missing")
+	}
+	sectionAvailability, ok := lotteryValue.(site.SectionAvailabilityProvider)
+	if !ok {
+		log.Fatal("lottery module does not implement site.SectionAvailabilityProvider")
+	}
+	siteSvc = site.NewWithProviders(
+		st.Pool(),
+		cfg.Title,
+		galleryProvider,
+		qrcodeProvider,
+		sectionAvailability,
+	)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,

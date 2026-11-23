@@ -4,7 +4,10 @@ import {
   type AppModuleRuntime,
 } from '@core/modules/contract'
 import { MODULE_CATALOG } from '@core/generated/catalog.generated'
-import { LOTTERY_SECTION_PLUGIN } from './sections'
+import {
+  LOTTERY_PARTICIPATE_SECTION_PLUGIN,
+  LOTTERY_SECTION_PLUGIN,
+} from './sections'
 import AdminLottery from './admin/AdminLottery'
 
 const LotteryScreen = lazy(() => import('./pages/LotteryScreen'))
@@ -33,7 +36,7 @@ export const lotteryModule = defineAppModule({
 
 export const moduleRuntime = {
   manifest: lotteryModule,
-  sections: [LOTTERY_SECTION_PLUGIN],
+  sections: [LOTTERY_SECTION_PLUGIN, LOTTERY_PARTICIPATE_SECTION_PLUGIN],
   adminPanels: [
     {
       key: 'lottery-admin',

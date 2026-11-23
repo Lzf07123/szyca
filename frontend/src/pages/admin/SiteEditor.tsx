@@ -598,7 +598,7 @@ export default function SiteEditor({
           <div>
             <p className="section-eyebrow">MODULE SWITCHES</p>
             <h2>公开模块开关</h2>
-            <p className="muted">总开关控制公开导航、入口与接口，保存后立即生效。</p>
+            <p className="muted">总开关控制公开模块与接口；首页模块卡的标题和链接会同步生成页眉选项。</p>
           </div>
           <div className="panel-head-actions">
             {featuresDirty && <span className="status-chip unsaved">有未保存开关</span>}
@@ -645,7 +645,7 @@ export default function SiteEditor({
           <div>
             <p className="section-eyebrow">HOMEPAGE COMPOSITION</p>
             <h2>首页内容编排</h2>
-            <p className="muted">Section 以插件实例编排，同一类型可重复添加；每个实例独立排序、发布和删除。</p>
+            <p className="muted">Section 以插件实例编排；模块卡的标题、链接和顺序会同步到页眉导航，重复链接只保留首个入口。</p>
           </div>
           <div className="panel-head-actions">
             {sectionsDirty && <span className="status-chip unsaved">有未保存编排</span>}

@@ -33,11 +33,12 @@ var allowedFeatures = func() map[string]bool {
 }()
 
 type Service struct {
-	pool           *pgxpool.Pool
-	defaultTitle   string
-	sectionPlugins *sectionPluginRegistry
-	gallery        GalleryProvider
-	qrcodes        QrcodeProvider
+	pool                *pgxpool.Pool
+	defaultTitle        string
+	sectionPlugins      *sectionPluginRegistry
+	sectionAvailability SectionAvailabilityProvider
+	gallery             GalleryProvider
+	qrcodes             QrcodeProvider
 }
 
 type Brand struct {
@@ -141,7 +142,7 @@ func New(pool *pgxpool.Pool, defaultTitle string) *Service {
 }
 
 func NewWithGallery(pool *pgxpool.Pool, defaultTitle string, gallery GalleryProvider) *Service {
-	return NewWithProviders(pool, defaultTitle, gallery, nil)
+	return NewWithProviders(pool, defaultTitle, gallery, nil, nil)
 }
 
 func NewWithProviders(
@@ -149,10 +150,12 @@ func NewWithProviders(
 	defaultTitle string,
 	gallery GalleryProvider,
 	qrcodes QrcodeProvider,
+	sectionAvailability SectionAvailabilityProvider,
 ) *Service {
 	service := New(pool, defaultTitle)
 	service.gallery = gallery
 	service.qrcodes = qrcodes
+	service.sectionAvailability = sectionAvailability
 	return service
 }
 
@@ -193,6 +196,10 @@ func (s *Service) Public(ctx context.Context) (*Public, error) {
 		return nil, err
 	}
 	sections = s.filterPublicSections(sections, enabled)
+	sections, err = s.filterAvailableSections(ctx, sections)
+	if err != nil {
+		return nil, err
+	}
 	backgrounds, err := s.Backgrounds(ctx)
 	if err != nil {
 		return nil, err
@@ -220,7 +227,7 @@ func (s *Service) Public(ctx context.Context) (*Public, error) {
 			Title:       title,
 			LogoURL:     logo,
 		},
-		Nav:         publicNav(enabled),
+		Nav:         s.publicNav(sections),
 		Footer:      footer,
 		Features:    features,
 		Sections:    sections,
@@ -242,6 +249,39 @@ func (s *Service) filterPublicSections(sections []Section, enabled map[string]bo
 		filteredSections = append(filteredSections, section)
 	}
 	return filteredSections
+}
+
+func (s *Service) filterAvailableSections(
+	ctx context.Context,
+	sections []Section,
+) ([]Section, error) {
+	if s.sectionAvailability == nil || len(sections) == 0 {
+		return sections, nil
+	}
+	seen := make(map[string]struct{}, len(sections))
+	kinds := make([]string, 0, len(sections))
+	for _, section := range sections {
+		if _, ok := seen[section.Kind]; ok {
+			continue
+		}
+		seen[section.Kind] = struct{}{}
+		kinds = append(kinds, section.Kind)
+	}
+	availability, err := s.sectionAvailability.SectionAvailability(ctx, kinds)
+	if err != nil {
+		return nil, fmt.Errorf("filter public Sections by availability: %w", err)
+	}
+	if len(availability) == 0 {
+		return sections, nil
+	}
+	filteredSections := sections[:0]
+	for _, section := range sections {
+		if visible, constrained := availability[section.Kind]; constrained && !visible {
+			continue
+		}
+		filteredSections = append(filteredSections, section)
+	}
+	return filteredSections, nil
 }
 
 func (s *Service) Features(ctx context.Context) ([]Feature, error) {
@@ -718,19 +758,55 @@ func (s *Service) branding(ctx context.Context) (string, Footer, error) {
 	return logo, footer, nil
 }
 
-func publicNav(enabled map[string]bool) []NavItem {
+func (s *Service) publicNav(sections []Section) []NavItem {
 	items := []NavItem{{Label: "首页", To: "/"}}
-	manifests := modulecatalog.All()
-	sort.SliceStable(manifests, func(i, j int) bool {
-		return manifests[i].NavOrder < manifests[j].NavOrder
-	})
-	for _, manifest := range manifests {
-		if manifest.NavLabel == "" || !enabled[manifest.Feature] {
+	seen := map[string]bool{"/": true}
+	for _, section := range sections {
+		plugin, ok := s.sectionPlugins.Get(section.Kind)
+		if !ok || plugin.Version != section.PluginVersion ||
+			!isModuleCardSection(section.Kind, section.PluginVersion) {
 			continue
 		}
-		items = append(items, NavItem{Label: manifest.NavLabel, To: manifest.Path})
+		title := sectionConfigText(section.Config, plugin.DefaultConfig, "title")
+		path := sectionConfigText(section.Config, plugin.DefaultConfig, "action_to")
+		if title == "" {
+			title = plugin.Label
+		}
+		if path == "" || !strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") || seen[path] {
+			continue
+		}
+		seen[path] = true
+		items = append(items, NavItem{Label: title, To: path})
 	}
 	return items
+}
+
+func isModuleCardSection(key string, version int) bool {
+	for _, section := range modulecatalog.Sections() {
+		if section.Key == key && section.Version == version {
+			return section.Layout == "module-card"
+		}
+	}
+	return false
+}
+
+func sectionConfigText(
+	config json.RawMessage,
+	defaults json.RawMessage,
+	key string,
+) string {
+	for _, raw := range []json.RawMessage{config, defaults} {
+		var values map[string]any
+		if len(raw) == 0 || json.Unmarshal(raw, &values) != nil {
+			continue
+		}
+		if value, ok := values[key].(string); ok {
+			if value = strings.TrimSpace(value); value != "" {
+				return value
+			}
+		}
+	}
+	return ""
 }
 
 func publicFooterLinks(enabled map[string]bool) []FooterLink {

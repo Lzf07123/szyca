@@ -20,11 +20,13 @@ var (
 )
 
 const (
-	maxNumberRange        int64 = 9_000_000_000_000_000
-	maxNumberWinners            = 100
-	maxNumberLevels             = 20
-	maxNumberLevelNameLen       = 40
-	maxNumberEventNameLen       = 80
+	maxNumberRange           int64 = 9_000_000_000_000_000
+	maxNumberWinners               = 100
+	maxNumberLevels                = 20
+	maxNumberLevelNameLen          = 40
+	maxNumberEventNameLen          = 80
+	numberScreenSection            = "lottery"
+	numberParticipateSection       = "lottery-participate"
 )
 
 type NumberModeSettings struct {

@@ -56,6 +56,26 @@ def public_get(path: str) -> tuple[int, object]:
         return status, payload.decode(errors="replace")
 
 
+def public_lottery_entry_kinds() -> list[str]:
+    status, payload = public_get("/api/site")
+    expect(status, payload, 200, "public site lottery entries")
+    return [
+        section["kind"]
+        for section in payload["sections"]
+        if section["kind"] in {"lottery", "lottery-participate"}
+    ]
+
+
+def public_lottery_navigation() -> list[tuple[str, str]]:
+    status, payload = public_get("/api/site")
+    expect(status, payload, 200, "public site lottery navigation")
+    return [
+        (item["label"], item["to"])
+        for item in payload["nav"]
+        if item["to"].startswith("/lottery")
+    ]
+
+
 def set_feature(admin: admin_api.Session, enabled: bool) -> None:
     status, payload, _ = admin.call(
         "PUT",
@@ -135,6 +155,8 @@ def main() -> None:
     set_feature(admin, True)
     set_modes(admin, screen_enabled=True, personal_enabled=False)
     stop_live_events(admin)
+    assert public_lottery_entry_kinds() == ["lottery"]
+    assert public_lottery_navigation() == [("抽奖大屏", "/lottery")]
 
     status, board = public_get("/api/lottery/board")
     expect(status, board, 200, "empty public number board")
@@ -269,6 +291,19 @@ def main() -> None:
     assert board == {"enabled": False, "event": None, "levels": []}
     status, campaign = public_get("/api/lottery/campaign")
     assert status == 404 and campaign.get("code") == "mode_disabled", campaign
+    assert public_lottery_entry_kinds() == []
+    assert public_lottery_navigation() == []
+
+    set_modes(admin, screen_enabled=False, personal_enabled=True)
+    assert public_lottery_entry_kinds() == ["lottery-participate"]
+    assert public_lottery_navigation() == [("招新抽奖", "/lottery/participate")]
+
+    set_modes(admin, screen_enabled=True, personal_enabled=True)
+    assert public_lottery_entry_kinds() == ["lottery", "lottery-participate"]
+    assert public_lottery_navigation() == [
+        ("抽奖大屏", "/lottery"),
+        ("招新抽奖", "/lottery/participate"),
+    ]
 
     set_modes(admin, screen_enabled=True, personal_enabled=False)
     status, deleted, _ = admin.call(

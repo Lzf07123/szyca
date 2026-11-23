@@ -74,11 +74,12 @@
 ```
 
 - `features` 只允许 `quiz / lottery / join / screen`。
-- `sections.kind` 必须是后端已注册的 Section 插件 key；内置插件为 `hero / about / activities / quiz / screen / lottery / join / gallery`。
+- `sections.kind` 必须是后端已注册的 Section 插件 key；内置插件为 `hero / about / activities / quiz / screen / lottery / lottery-participate / join / gallery`。
 - `sections.plugin_version` 表示插件契约版本；同一 `kind` 可以有多个独立实例，以 `id` 区分。
+- `nav` 由当前公开的 `module-card` Section 生成：标题使用 `config.title`，目标使用 `config.action_to`，顺序跟随 Section 排序；相同目标只保留首个入口。
 - `gallery` Section 额外返回 `gallery` 数组，条目包含 `id / section_id / title / image_url / sort / created_at / updated_at`。
 - `qrcodes` 由 Join 模块的 `QrcodeProvider` 贡献；公开条目只包含 `id / title / image_url`。
-- 关闭功能时导航和对应 Section 同步移除。
+- 关闭功能或停用 Section 时，对应页眉导航和 Section 同步移除；模块公开子模式关闭时，也只返回对应子模式可见的 Section 与导航。
 - 响应带 ETag；`If-None-Match` 命中时返回 304。
 - `Cache-Control: public, max-age=0, must-revalidate`，保证配置尽快生效。
 

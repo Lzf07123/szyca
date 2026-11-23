@@ -68,8 +68,15 @@ func NewNumberService(pool *pgxpool.Pool, publisher EventPublisher) *NumberServi
 }
 
 func (s *NumberService) Modes(ctx context.Context) (*NumberModeSettings, error) {
+	return readNumberModes(ctx, s.pool)
+}
+
+func readNumberModes(
+	ctx context.Context,
+	queryer numberRowQueryer,
+) (*NumberModeSettings, error) {
 	var settings NumberModeSettings
-	err := s.pool.QueryRow(ctx, `
+	err := queryer.QueryRow(ctx, `
 		SELECT screen_enabled, personal_enabled, updated_at
 		FROM lottery_mode_settings
 		WHERE id = 1`,

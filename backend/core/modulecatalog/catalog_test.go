@@ -14,14 +14,20 @@ func TestCatalogContainsBusinessModulesAndSections(t *testing.T) {
 		}
 	}
 	sections := Sections()
-	if len(sections) != 5 {
-		t.Fatalf("section count = %d, want 5", len(sections))
+	if len(sections) != 6 {
+		t.Fatalf("section count = %d, want 6", len(sections))
 	}
 	layouts := map[string]string{}
 	for _, section := range sections {
 		layouts[section.Key] = section.Layout
 	}
-	for _, key := range []string{"quiz", "lottery", "join", "screen"} {
+	for _, key := range []string{
+		"quiz",
+		"lottery",
+		"lottery-participate",
+		"join",
+		"screen",
+	} {
 		if layouts[key] != "module-card" {
 			t.Fatalf("%s layout = %q", key, layouts[key])
 		}

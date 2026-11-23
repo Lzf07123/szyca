@@ -84,6 +84,14 @@ type Section struct {
 
 `home_order` 只提供默认展示顺序建议；数据库实例的 `sort` 是运行时权威。
 
+模块可在自身公开子模式关闭时隐藏 Section 实例。core Site 通过
+`SectionAvailabilityProvider` 按 `kind` 请求可见性，模块只返回自己拥有的 key；
+未返回的 key 保持可见。Home 不需要按模块 key 写特殊分支，`moduleCount` 也只统计
+最终公开的实例。
+
+公开页眉导航同样由最终可见的 `module-card` 实例生成：`config.title` 作为标签，
+`config.action_to` 作为链接，实例排序决定导航顺序；重复目标只保留首个入口。
+
 ## 5. 配置字段 Schema
 
 | 类型 | 值 | 服务端校验 |

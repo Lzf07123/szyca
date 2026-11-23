@@ -210,6 +210,36 @@ func (s *Service) PublicCampaign(ctx context.Context, userID *int64) (*UserStatu
 	return status, nil
 }
 
+// SectionAvailability keeps homepage lottery entries aligned with the two
+// public sub-modes while leaving the module-wide feature flag in core Site.
+func (s *Service) SectionAvailability(
+	ctx context.Context,
+	kinds []string,
+) (map[string]bool, error) {
+	requested := make(map[string]struct{}, len(kinds))
+	for _, kind := range kinds {
+		switch kind {
+		case numberScreenSection, numberParticipateSection:
+			requested[kind] = struct{}{}
+		}
+	}
+	if len(requested) == 0 {
+		return map[string]bool{}, nil
+	}
+	modes, err := readNumberModes(ctx, s.pool)
+	if err != nil {
+		return nil, err
+	}
+	availability := make(map[string]bool, len(requested))
+	if _, ok := requested[numberScreenSection]; ok {
+		availability[numberScreenSection] = modes.ScreenEnabled
+	}
+	if _, ok := requested[numberParticipateSection]; ok {
+		availability[numberParticipateSection] = modes.PersonalEnabled
+	}
+	return availability, nil
+}
+
 func (s *Service) Draw(
 	ctx context.Context,
 	userID int64,

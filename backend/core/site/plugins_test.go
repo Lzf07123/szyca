@@ -9,8 +9,8 @@ import (
 func TestBuiltinSectionPluginsAreRepeatable(t *testing.T) {
 	registry := mustBuiltinSectionPluginRegistry(t)
 	plugins := registry.List()
-	if len(plugins) != 8 {
-		t.Fatalf("built-in plugin count = %d, want 8", len(plugins))
+	if len(plugins) != 9 {
+		t.Fatalf("built-in plugin count = %d, want 9", len(plugins))
 	}
 	for _, plugin := range plugins {
 		if !plugin.Repeatable {

@@ -53,6 +53,7 @@ export default function ModuleCard({
   description,
   to,
   openLabel = 'OPEN MODULE',
+  moduleLabel,
 }: {
   id?: string
   kind: ModuleKind
@@ -61,8 +62,9 @@ export default function ModuleCard({
   description: string
   to: string
   openLabel?: string
+  moduleLabel?: string
 }) {
-  const english = kind.toUpperCase()
+  const english = (moduleLabel || kind).toUpperCase()
   return (
     <article
       id={id}

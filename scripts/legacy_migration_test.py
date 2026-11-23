@@ -232,7 +232,7 @@ def main() -> None:
         assert first["round_questions"] == before["round_questions"] == 20, (before, first)
         assert first["qrcodes"] == before["qrcodes"] == 1, (before, first)
         assert first["backgrounds"] == before["backgrounds"] == 1, (before, first)
-        assert first["section_count"] == 8
+        assert first["section_count"] == 9
         assert first["gallery_images"] == 0
         assert first["admin_count"] >= 1
         versions = psql("SELECT version FROM schema_migrations ORDER BY version").stdout.splitlines()
@@ -245,6 +245,8 @@ def main() -> None:
             "202611240001_screen_section.sql",
             "202611240002_lottery_number_board.sql",
             "202611240003_lottery_public_copy.sql",
+            "202611240004_lottery_mode_entries.sql",
+            "202611240005_lottery_screen_default_copy.sql",
         ], versions
         assert psql(
             "SELECT count(*) FROM information_schema.columns "
@@ -269,7 +271,7 @@ def main() -> None:
         ).stdout.strip() == "true:false"
         assert psql(
             "SELECT config->>'body' FROM home_sections WHERE kind = 'lottery' LIMIT 1"
-        ).stdout.strip() == "现场号码抽奖将在大屏实时公布中奖结果。"
+        ).stdout.strip() == "现场号码抽奖实时开奖，中奖结果在大屏统一公布。"
 
         config = run(["docker", "exec", APP, "wget", "-qO-", "http://127.0.0.1:8095/api/config"])
         site = run(["docker", "exec", APP, "wget", "-qO-", "http://127.0.0.1:8095/api/site"])

@@ -75,10 +75,11 @@ export default function AdminLottery({ context }: AdminPanelProps) {
         }),
       })
       setModes(data.modes)
+      await context.reloadSite()
       context.notify(
         patch.screen_enabled !== undefined
-          ? `号码开奖大屏已${data.modes.screen_enabled ? '开启' : '关闭'}`
-          : `个人抽取已${data.modes.personal_enabled ? '开启' : '关闭'}`,
+          ? `抽奖大屏已${data.modes.screen_enabled ? '开启' : '关闭'}`
+          : `招新抽奖已${data.modes.personal_enabled ? '开启' : '关闭'}`,
       )
     } catch (cause) {
       context.notify((cause as Error).message, true)
@@ -111,7 +112,7 @@ export default function AdminLottery({ context }: AdminPanelProps) {
           <div>
             <p className="section-eyebrow">LOTTERY CONTROL</p>
             <h2>抽奖模块</h2>
-            <p className="muted">总开关控制整个模块的导航、路由和接口；下方两个模式可分别决定号码大屏与个人抽取是否公开可用。</p>
+            <p className="muted">总开关控制整个模块的导航、路由和接口；下方两个模式可分别决定抽奖大屏与招新抽奖是否公开可用。</p>
           </div>
           <button
             className={`switch-large${feature.enabled ? ' on' : ''}`}
@@ -127,7 +128,7 @@ export default function AdminLottery({ context }: AdminPanelProps) {
         <div className="lottery-mode-grid">
           <label className={`lottery-mode-card${modes.screen_enabled ? ' on' : ''}`}>
             <span>
-              <strong>号码开奖大屏</strong>
+              <strong>抽奖大屏</strong>
               <small>/lottery · 只读大屏，由后台逐级触发</small>
             </span>
             <input
@@ -139,7 +140,7 @@ export default function AdminLottery({ context }: AdminPanelProps) {
           </label>
           <label className={`lottery-mode-card${modes.personal_enabled ? ' on' : ''}`}>
             <span>
-              <strong>个人抽取</strong>
+              <strong>招新抽奖</strong>
               <small>/lottery/participate · 答题后由参与者操作</small>
             </span>
             <input
@@ -159,7 +160,7 @@ export default function AdminLottery({ context }: AdminPanelProps) {
           className={modeTab === 'number' ? 'active' : ''}
           onClick={() => setModeTab('number')}
         >
-          号码开奖
+          抽奖大屏
           <small>现场大屏</small>
         </button>
         <button
@@ -168,7 +169,7 @@ export default function AdminLottery({ context }: AdminPanelProps) {
           className={modeTab === 'personal' ? 'active' : ''}
           onClick={() => setModeTab('personal')}
         >
-          个人抽奖
+          招新抽奖
           <small>答题后抽取</small>
         </button>
       </div>

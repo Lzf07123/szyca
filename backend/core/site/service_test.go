@@ -1,27 +1,61 @@
 package site
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 )
 
-func TestPublicNavigationFollowsFeatureFlags(t *testing.T) {
-	nav := publicNav(map[string]bool{
-		FeatureJoin:    true,
-		FeatureQuiz:    true,
-		FeatureLottery: false,
-		FeatureScreen:  true,
+type sectionAvailabilityStub struct {
+	result map[string]bool
+	kinds  []string
+}
+
+func (s *sectionAvailabilityStub) SectionAvailability(
+	_ context.Context,
+	kinds []string,
+) (map[string]bool, error) {
+	s.kinds = kinds
+	return s.result, nil
+}
+
+func TestPublicNavigationFollowsVisibleModuleSections(t *testing.T) {
+	service := &Service{sectionPlugins: mustBuiltinSectionPluginRegistry(t)}
+	nav := service.publicNav([]Section{
+		{
+			Kind:          "hero",
+			PluginVersion: 1,
+			Config:        json.RawMessage(`{"title":"不会进入页眉"}`),
+		},
+		{
+			Kind:          "lottery",
+			PluginVersion: 1,
+			Config:        json.RawMessage(`{"title":"抽奖大屏","action_to":"/lottery"}`),
+		},
+		{
+			Kind:          "lottery-participate",
+			PluginVersion: 1,
+			Config:        json.RawMessage(`{"title":"招新抽奖","action_to":"/lottery/participate"}`),
+		},
+		{
+			Kind:          "lottery",
+			PluginVersion: 1,
+			Config:        json.RawMessage(`{"title":"重复入口","action_to":"/lottery"}`),
+		},
 	})
 	var paths []string
 	for _, item := range nav {
 		paths = append(paths, item.To)
 	}
 	got := strings.Join(paths, ",")
-	want := "/,/join,/quiz,/screen"
+	want := "/,/lottery,/lottery/participate"
 	if got != want {
 		t.Fatalf("navigation = %q, want %q", got, want)
+	}
+	if nav[1].Label != "抽奖大屏" || nav[2].Label != "招新抽奖" {
+		t.Fatalf("navigation labels = %+v", nav)
 	}
 }
 
@@ -40,6 +74,30 @@ func TestFilterPublicSectionsUsesPluginManifest(t *testing.T) {
 	})
 	if len(filtered) != 2 || filtered[0].ID != 1 || filtered[1].ID != 3 {
 		t.Fatalf("filtered sections = %+v", filtered)
+	}
+}
+
+func TestFilterAvailableSectionsUsesModuleSubModes(t *testing.T) {
+	availability := &sectionAvailabilityStub{result: map[string]bool{
+		"lottery":             true,
+		"lottery-participate": false,
+	}}
+	service := &Service{sectionAvailability: availability}
+	sections := []Section{
+		{ID: 1, Kind: "quiz"},
+		{ID: 2, Kind: "lottery"},
+		{ID: 3, Kind: "lottery"},
+		{ID: 4, Kind: "lottery-participate"},
+	}
+	filtered, err := service.filterAvailableSections(context.Background(), sections)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(filtered) != 3 || filtered[0].ID != 1 || filtered[1].ID != 2 || filtered[2].ID != 3 {
+		t.Fatalf("filtered sections = %+v", filtered)
+	}
+	if got := strings.Join(availability.kinds, ","); got != "quiz,lottery,lottery-participate" {
+		t.Fatalf("availability kinds = %q", got)
 	}
 }
 

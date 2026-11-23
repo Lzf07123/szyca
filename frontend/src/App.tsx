@@ -155,7 +155,7 @@ function Layout() {
                   <NavLink
                     key={item.to}
                     to={item.to}
-                    end={item.to === '/'}
+                    end={!item.to.includes('#')}
                     className={({ isActive }) => (isActive ? 'active' : undefined)}
                   >
                     <span className="nav-prefix" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>

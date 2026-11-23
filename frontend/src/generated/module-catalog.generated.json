@@ -237,18 +237,18 @@
           "scope": "home",
           "layout": "module-card",
           "home_order": 50,
-          "label": "号码抽奖",
-          "description": "现场号码开奖大屏的模块入口，可重复添加为多个活动卡片。",
+          "label": "抽奖大屏",
+          "description": "现场号码开奖大屏的模块入口，仅在号码大屏模式开启时展示。",
           "feature": "lottery",
           "repeatable": true,
           "max_instances": 0,
           "summary_field": "title",
           "default_config": {
-            "action_label": "查看大屏",
+            "action_label": "进入大屏",
             "action_to": "/lottery",
-            "body": "现场号码抽奖将在大屏实时公布中奖结果。",
+            "body": "现场号码抽奖实时开奖，中奖结果在大屏统一公布。",
             "eyebrow": "现场开奖",
-            "title": "号码抽奖"
+            "title": "抽奖大屏"
           },
           "fields": [
             {
@@ -288,6 +288,69 @@
               "label": "站内路径",
               "type": "path",
               "placeholder": "/lottery",
+              "group": "actions",
+              "group_label": "活动入口",
+              "max_length": 1000
+            }
+          ]
+        },
+        {
+          "key": "lottery-participate",
+          "version": 1,
+          "scope": "home",
+          "layout": "module-card",
+          "home_order": 51,
+          "label": "招新抽奖",
+          "description": "答题后个人抽取的模块入口，仅在招新抽奖模式开启时展示。",
+          "feature": "lottery",
+          "repeatable": true,
+          "max_instances": 0,
+          "summary_field": "title",
+          "default_config": {
+            "action_label": "参与抽奖",
+            "action_to": "/lottery/participate",
+            "body": "完成答题后参与个人抽取，中奖结果与奖品以现场公布为准。",
+            "eyebrow": "答题福利",
+            "title": "招新抽奖"
+          },
+          "fields": [
+            {
+              "key": "eyebrow",
+              "label": "眉题",
+              "type": "text",
+              "group": "content",
+              "group_label": "活动文案",
+              "max_length": 120
+            },
+            {
+              "key": "title",
+              "label": "标题",
+              "type": "text",
+              "group": "content",
+              "group_label": "活动文案",
+              "max_length": 120
+            },
+            {
+              "key": "body",
+              "label": "正文",
+              "type": "textarea",
+              "group": "content",
+              "group_label": "活动文案",
+              "max_length": 1000
+            },
+            {
+              "key": "action_label",
+              "label": "按钮文案",
+              "type": "text",
+              "group": "actions",
+              "group_label": "活动入口",
+              "max_length": 120
+            },
+            {
+              "key": "action_to",
+              "label": "站内路径",
+              "type": "path",
+              "placeholder": "/lottery/participate",
               "group": "actions",
               "group_label": "活动入口",
               "max_length": 1000

@@ -79,6 +79,41 @@ const fallbackSections: HomeSection[] = [
   ...fallbackModuleSections,
 ].sort((a, b) => a.sort - b.sort || a.id - b.id)
 
+const fallbackFeatures: SiteData['features'] = MODULE_CATALOG
+  .filter((module) => module.feature)
+  .map((module) => ({
+    key: module.feature!,
+    enabled: module.feature !== 'lottery',
+    config: {},
+  }))
+const fallbackFeatureState = new Map(fallbackFeatures.map((feature) => [feature.key, feature.enabled]))
+const fallbackModuleCardFeatures = new Map<string, string | undefined>()
+for (const module of MODULE_CATALOG) {
+  for (const raw of module.sections) {
+    if (raw.layout !== 'module-card') continue
+    const key = `${String(raw.key)}@${Number(raw.version)}`
+    const feature = typeof raw.feature === 'string' ? raw.feature : module.feature
+    fallbackModuleCardFeatures.set(key, feature)
+  }
+}
+
+function fallbackNavigation(): SiteData['nav'] {
+  const items: SiteData['nav'] = [{ label: '首页', to: '/' }]
+  const seen = new Set(['/'])
+  for (const section of fallbackSections) {
+    const feature = fallbackModuleCardFeatures.get(
+      `${section.kind}@${section.plugin_version}`,
+    )
+    if (feature && !fallbackFeatureState.get(feature)) continue
+    const title = typeof section.config.title === 'string' ? section.config.title.trim() : ''
+    const path = typeof section.config.action_to === 'string' ? section.config.action_to.trim() : ''
+    if (!title || !path.startsWith('/') || path.startsWith('//') || seen.has(path)) continue
+    seen.add(path)
+    items.push({ label: title, to: path })
+  }
+  return items
+}
+
 export const FALLBACK_SITE: SiteData = {
   brand: {
     name: '计算机协会',
@@ -87,13 +122,7 @@ export const FALLBACK_SITE: SiteData = {
     title: '计算机协会 · 官网',
     logo_url: '',
   },
-  nav: [
-    { label: '首页', to: '/' },
-    ...MODULE_CATALOG
-      .filter((module) => module.nav_label && module.path)
-      .sort((a, b) => (a.nav_order ?? 0) - (b.nav_order ?? 0))
-      .map((module) => ({ label: module.nav_label!, to: module.path! })),
-  ],
+  nav: fallbackNavigation(),
   footer: {
     owner: '计算机协会 · 汕头职业技术学院',
     license: '开源协议：MIT',
@@ -109,13 +138,7 @@ export const FALLBACK_SITE: SiteData = {
         .map((module) => ({ label: module.footer_label!, href: module.path! })),
     ],
   },
-  features: MODULE_CATALOG
-    .filter((module) => module.feature)
-    .map((module) => ({
-      key: module.feature!,
-      enabled: module.feature !== 'lottery',
-      config: {},
-    })),
+  features: fallbackFeatures,
   sections: fallbackSections,
   backgrounds: [],
   qrcodes: [],

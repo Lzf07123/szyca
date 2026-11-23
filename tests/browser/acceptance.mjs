@@ -84,11 +84,12 @@ async function setLottery(admin, enabled) {
 async function setLotterySection(admin, enabled) {
   const current = await api('/api/admin/site/sections', { cookie: admin.cookie })
   expect(current.status === 200, 'could not read site sections')
+  const lotteryKinds = new Set(['lottery', 'lottery-participate'])
   const sections = current.payload.sections.map((section) => ({
     id: section.id,
     kind: section.kind,
     plugin_version: section.plugin_version || 1,
-    enabled: section.kind === 'lottery' ? enabled : section.enabled,
+    enabled: lotteryKinds.has(section.kind) ? enabled : section.enabled,
     sort: section.sort,
     starts_at: section.starts_at || null,
     ends_at: section.ends_at || null,
@@ -102,7 +103,9 @@ async function setLotterySection(admin, enabled) {
     body: { sections },
   })
   expect(response.status === 200, `set lottery section failed: ${JSON.stringify(response.payload)}`)
-  return sections.find((section) => section.kind === 'lottery')?.enabled === true
+  return sections
+    .filter((section) => lotteryKinds.has(section.kind))
+    .every((section) => section.enabled === enabled)
 }
 
 async function expectedHomeModuleCount() {
@@ -681,7 +684,19 @@ async function main() {
       await assertFramedChrome(page, `home-on-${width}`)
       await assertCosmosHome(page, `home-on-${width}`, onModuleCount)
       expect(await page.locator('#site-navigation a[href="/lottery"]').count() === 1, `home-on-${width}: lottery nav missing`)
+      expect(
+        await page.locator('#site-navigation').getByRole('link', { name: '抽奖大屏', exact: true }).count() === 1,
+        `home-on-${width}: screen nav label is not synced with the module card`,
+      )
+      expect(
+        await page.locator('#site-navigation a[href="/lottery/participate"]').count() === 0,
+        `home-on-${width}: disabled recruit lottery appeared in navigation`,
+      )
       expect(await page.locator('#lottery').count() === 1, `home-on-${width}: lottery section missing`)
+      expect(
+        await page.locator('#lottery-participate').count() === 0,
+        `home-on-${width}: disabled recruit lottery section appeared`,
+      )
       expect(
         !/管理员|后台/.test(await page.locator('#lottery').innerText()),
         `home-on-${width}: public lottery card exposes admin wording`,
@@ -690,6 +705,70 @@ async function main() {
       await page.screenshot({ path: `${ARTIFACTS}/screenshots/home-on-${width}.jpg`, fullPage: true, type: 'jpeg', quality: 78 })
       await context.close()
     }
+
+    const entryContext = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    const entryPage = await entryContext.newPage()
+    await attachDiagnostics(entryPage, 'lottery-entry-modes')
+
+    await setLotteryModes(admin, { screen: true, personal: true })
+    const bothModuleCount = await expectedHomeModuleCount()
+    expect(
+      bothModuleCount === offModuleCount + 2,
+      `both lottery modes should add two module cards: ${offModuleCount} -> ${bothModuleCount}`,
+    )
+    await entryPage.goto(BASE + '/', { waitUntil: 'networkidle' })
+    expect(await entryPage.locator('#lottery').count() === 1, 'both modes: screen card missing')
+    expect(await entryPage.locator('#lottery-participate').count() === 1, 'both modes: recruit card missing')
+    expect(
+      await entryPage.locator('#site-navigation').getByRole('link', { name: '抽奖大屏', exact: true }).count() === 1,
+      'both modes: screen navigation label is not synced',
+    )
+    expect(
+      await entryPage.locator('#site-navigation').getByRole('link', { name: '招新抽奖', exact: true }).count() === 1,
+      'both modes: recruit navigation label is not synced',
+    )
+    expect(
+      (await entryPage.locator('#lottery h3').innerText()).includes('SCREEN'),
+      'both modes: screen card is not visually distinguished',
+    )
+    expect(
+      (await entryPage.locator('#lottery-participate h3').innerText()).includes('RECRUIT'),
+      'both modes: recruit card is not visually distinguished',
+    )
+
+    await entryPage.goto(BASE + '/lottery/participate', { waitUntil: 'networkidle' })
+    expect(
+      await entryPage.locator('#site-navigation a[href="/lottery/participate"]').getAttribute('class') === 'active',
+      'both modes: recruit navigation is not active on its route',
+    )
+    expect(
+      !((await entryPage.locator('#site-navigation a[href="/lottery"]').getAttribute('class')) || '').includes('active'),
+      'both modes: screen navigation is incorrectly active on the recruit route',
+    )
+
+    await setLotteryModes(admin, { screen: false, personal: true })
+    const personalModuleCount = await expectedHomeModuleCount()
+    expect(
+      personalModuleCount === offModuleCount + 1,
+      `personal lottery alone should add one module card: ${offModuleCount} -> ${personalModuleCount}`,
+    )
+    await entryPage.goto(BASE + '/', { waitUntil: 'networkidle' })
+    expect(await entryPage.locator('#lottery').count() === 0, 'personal-only mode exposed the screen card')
+    expect(
+      await entryPage.locator('#lottery-participate').count() === 1,
+      'personal-only mode is missing the recruit card',
+    )
+    expect(
+      await entryPage.locator('#site-navigation a[href="/lottery"]').count() === 0,
+      'personal-only mode exposed the screen navigation item',
+    )
+    expect(
+      await entryPage.locator('#site-navigation').getByRole('link', { name: '招新抽奖', exact: true }).count() === 1,
+      'personal-only mode is missing the recruit navigation item',
+    )
+
+    await setLotteryModes(admin, { screen: true, personal: false })
+    await entryContext.close()
 
     const pages = [
       ...(await loadModuleScenarios()).map((scenario) => [scenario.path, scenario.title]),
