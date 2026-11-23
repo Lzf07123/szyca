@@ -20,8 +20,15 @@ func (m *module) RegisterHTTP(mux *http.ServeMux, api contract.HTTP) error {
 	) {
 		m.handleCampaign(w, r, api)
 	}))
-	mux.HandleFunc("POST /api/lottery/draw", api.Feature("lottery", api.User(m.handleDraw)))
-	mux.HandleFunc("GET /api/lottery/me", api.Feature("lottery", api.User(m.handleMe)))
+	mux.HandleFunc(
+		"POST /api/lottery/draw",
+		api.Feature("lottery", m.requirePersonal(api.User(m.handleDraw))),
+	)
+	mux.HandleFunc(
+		"GET /api/lottery/me",
+		api.Feature("lottery", m.requirePersonal(api.User(m.handleMe))),
+	)
+	mux.HandleFunc("GET /api/lottery/board", api.Feature("lottery", m.handleNumberBoard))
 
 	mux.HandleFunc("GET /api/admin/lottery/campaigns", api.Permission("lottery.configure", func(
 		w http.ResponseWriter,
@@ -78,10 +85,20 @@ func (m *module) RegisterHTTP(mux *http.ServeMux, api contract.HTTP) error {
 	) {
 		m.handleAdminExport(w, r)
 	}))
+	m.registerNumberRoutes(mux, api)
 	return nil
 }
 
 func (m *module) handleCampaign(w http.ResponseWriter, r *http.Request, api contract.HTTP) {
+	enabled, err := m.number.PersonalEnabled(r.Context())
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !enabled {
+		httpx.WriteErrorCode(w, http.StatusNotFound, "个人抽奖当前未开放", "mode_disabled")
+		return
+	}
 	user, err := api.OptionalUser(r)
 	if err != nil {
 		httpx.WriteErrorCode(w, http.StatusUnauthorized, "token 无效", "unauthorized")
@@ -97,6 +114,21 @@ func (m *module) handleCampaign(w http.ResponseWriter, r *http.Request, api cont
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, status)
+}
+
+func (m *module) requirePersonal(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		enabled, err := m.number.PersonalEnabled(r.Context())
+		if err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if !enabled {
+			httpx.WriteErrorCode(w, http.StatusNotFound, "个人抽奖当前未开放", "mode_disabled")
+			return
+		}
+		next(w, r)
+	}
 }
 
 func (m *module) handleDraw(w http.ResponseWriter, r *http.Request, user contract.User) {

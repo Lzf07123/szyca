@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '@core/api/client'
+import ConfirmDialog from '@core/components/ConfirmDialog'
 
 type QuizState = 'start' | 'stop'
 
@@ -14,6 +15,7 @@ export default function LiveOperations({
   const [busy, setBusy] = useState(false)
   const [announcement, setAnnouncement] = useState('')
   const [announcing, setAnnouncing] = useState(false)
+  const [confirmStop, setConfirmStop] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -37,9 +39,8 @@ export default function LiveOperations({
     }
   }, [onStateChange])
 
-  const switchState = async (next: QuizState) => {
+  const changeState = async (next: QuizState) => {
     if (busy) return
-    if (next === 'stop' && !window.confirm('结束答题后，所有尚未提交的答案都将被拒绝。确定现在结束吗？')) return
     setBusy(true)
     try {
       await api('/api/admin/quiz-state', {
@@ -54,6 +55,15 @@ export default function LiveOperations({
     } finally {
       setBusy(false)
     }
+  }
+
+  const switchState = (next: QuizState) => {
+    if (busy) return
+    if (next === 'stop') {
+      setConfirmStop(true)
+      return
+    }
+    void changeState(next)
   }
 
   const broadcast = async () => {
@@ -84,10 +94,10 @@ export default function LiveOperations({
             {state === 'start' ? '答题进行中' : '答题未开始'}
           </b>
         </p>
-        <button className="btn btn-accent" type="button" disabled={state === 'start' || busy} onClick={() => void switchState('start')}>
+        <button className="btn btn-accent" type="button" disabled={state === 'start' || busy} onClick={() => switchState('start')}>
           {busy ? '处理中…' : '开始答题'}
         </button>
-        <button className="btn btn-danger-outline" type="button" disabled={state === 'stop' || busy} onClick={() => void switchState('stop')}>
+        <button className="btn btn-danger-outline" type="button" disabled={state === 'stop' || busy} onClick={() => switchState('stop')}>
           结束答题
         </button>
       </div>
@@ -124,6 +134,23 @@ export default function LiveOperations({
           {announcing ? '正在广播…' : '广播公告'}
         </button>
       </div>
+      {confirmStop && (
+        <ConfirmDialog
+          title="结束本轮答题？"
+          message="结束答题后，所有尚未提交的答案都将被拒绝。"
+          details={[
+            '已提交答案和排行榜记录会保留',
+            '参与者需要等待下一轮开始',
+          ]}
+          confirmLabel="确认结束"
+          tone="danger"
+          onCancel={() => setConfirmStop(false)}
+          onConfirm={() => {
+            setConfirmStop(false)
+            void changeState('stop')
+          }}
+        />
+      )}
     </>
   )
 }

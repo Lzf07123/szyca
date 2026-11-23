@@ -25,7 +25,7 @@
 - **排行榜**：按最佳一轮总分优先、同分按用时排序；全量排名（未答题也排）、大屏最多显示 99 名、头部显示「我的排名」、参与/答题/在线连接统计
 - **身份规则**：设备指纹去重（同设备换昵称需先放弃）；放弃身份需二次确认并告知副作用；放弃后昵称永久封存、榜单留痕；可多轮答题取历史最佳成绩
 - **后台 2.0**：owner / content_editor / event_operator / data_viewer 固定角色；HttpOnly + SameSite 会话、CSRF、Origin 校验、登录限流和全量写操作审计；菜单按权限生成，接口仍有服务端授权
-- **集成抽奖**：独立活动/奖品/抽取/领取数据域；CSPRNG 加权抽取、活动时间与暂停、资格门槛、库存事务、唯一用户约束、`request_id` 幂等、线下领取核销与 CSV
+- **集成抽奖**：号码开奖大屏与个人抽取双模式；后台配置连续号码范围、中奖等级和每级人数，逐级 CSPRNG 开奖并实时推送；旧答题后个人抽取、资格门槛、领取核销与 CSV 继续保留
 - **迁移与媒体**：版本化 SQL、PostgreSQL advisory lock、事务迁移与校验和；媒体台账记录引用关系，被引用文件禁止直接删除
 
 ## 快速开始（低配机器：直接拉取镜像）
@@ -45,7 +45,8 @@ docker compose -f deploy/docker-compose.yml up -d
 | /quiz | 答题 |
 | /result | 个人成绩 |
 | /screen | 排行榜大屏（投屏） |
-| /lottery | 抽奖（默认关闭） |
+| /lottery | 号码开奖大屏（默认关闭） |
+| /lottery/participate | 答题后个人抽取（默认关闭） |
 | /admin | 后台管理（首次 owner 见 .env） |
 | /healthz | 健康检查 |
 
@@ -108,7 +109,7 @@ scripts/publish_image.sh --push
 3. **答题控制**：开始/结束答题、特效广播、公告广播、二维码管理、成绩导出
 4. **题库**：**批量导入**（下载模板，列：题目,选项A~F,正确答案(A-F),难度,分值；「示例」开头行自动跳过）、新增题目、启用/停用
 5. **站点内容**：模块总开关、Section 新增/删除/排序/启停、草稿/发布、定时上下线、标题/正文/CTA 配置
-6. **抽奖**：总开关、活动开始/暂停/结束、资格、奖品权重与库存、结果查看、领取核销与导出
+6. **抽奖**：总开关、号码大屏/个人抽取独立模式、号码场次逐级开奖、历史导出，以及个人活动、库存、领取核销
 7. **媒体与外观**：Logo、页脚、背景和媒体引用台账
 8. **管理员/审计**：创建角色账号、停用即时踢线、按管理员/资源/请求 ID 查询审计
 
@@ -130,6 +131,7 @@ scripts/publish_image.sh --push
 | GET | /ws?token=… | WebSocket 实时推送（匿名=大屏） |
 | POST | /api/identity/abandon | 放弃身份（需本机 device_fp 归属校验） |
 | GET | /api/lottery/campaign | 当前抽奖活动和用户可见状态 |
+| GET | /api/lottery/board | 当前号码开奖场次、等级与中奖号码 |
 | POST | /api/lottery/draw | 带用户 token 与 request_id 抽取 |
 | GET | /api/lottery/me | 当前用户抽奖和领取状态 |
 | POST | /api/admin/auth/login | 管理员登录，设置 HttpOnly/SameSite Cookie 并返回 CSRF token |
@@ -216,11 +218,12 @@ python3 scripts/integration_test.py
 python3 scripts/admin_access_test.py
 python3 scripts/site_media_test.py
 python3 scripts/lottery_test.py
+python3 scripts/lottery_number_test.py
 python3 scripts/migration_test.py
 python3 scripts/site_perf_test.py
 ```
 
-覆盖题目脱敏、题序、幂等、服务端超时、排行榜/导出、并发注册、WS Origin、管理员登录限流、RBAC、CSRF、审计、站点 ETag/模块开关、媒体引用、抽奖资格、同用户并发、库存和领取。后端单测：
+覆盖题目脱敏、题序、幂等、服务端超时、排行榜/导出、并发注册、WS Origin、管理员登录限流、RBAC、CSRF、审计、站点 ETag/模块开关、媒体引用、抽奖资格、同用户并发、库存和领取，以及号码场次状态机、逐级开奖、并发重放和号码唯一性。后端单测：
 
 ```bash
 docker run --rm -v "$PWD:/src" -w /src golang:1.22-alpine go test ./...

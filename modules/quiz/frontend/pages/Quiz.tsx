@@ -14,6 +14,7 @@ import {
   type PendingAnswer,
 } from '@core/api/client'
 import PageIntro from '@core/components/PageIntro'
+import ConfirmDialog from '@core/components/ConfirmDialog'
 import { usePageMeta } from '@core/components/PageMeta'
 import { QuizSocket, wsURL } from '@core/ws/socket'
 
@@ -67,6 +68,7 @@ export default function Quiz() {
   const [pendingAnswer, setPendingAnswer] = useState<PendingAnswer | null>(null)
   const [syncingAnswer, setSyncingAnswer] = useState(false)
   const [confirmReq, setConfirmReq] = useState<{ kind: 'identity' | 'round'; byDevice: boolean; step: 'ask' | 'final' } | null>(null)
+  const [leaveConfirm, setLeaveConfirm] = useState(false)
   const locked = useRef(false)
   const sockRef = useRef<QuizSocket | null>(null)
   const nav = useNavigate()
@@ -150,11 +152,7 @@ export default function Quiz() {
       blocker.proceed()
       return
     }
-    if (window.confirm('答题进行中，确定要离开本页吗？')) {
-      blocker.proceed()
-    } else {
-      blocker.reset()
-    }
+    setLeaveConfirm(true)
   }, [blocker])
 
   // 退出答题：保留身份与进度，返回首页；标记已退出，刷新/再进不自动恢复
@@ -864,6 +862,26 @@ export default function Quiz() {
             )}
           </div>
         </div>
+      )}
+      {leaveConfirm && blocker.state === 'blocked' && (
+        <ConfirmDialog
+          title="离开正在进行的答题？"
+          message="当前答题仍在进行，离开页面后将暂停本页操作。"
+          details={[
+            '已保存的答案不会丢失',
+            '未提交的答案可能因超时失效',
+          ]}
+          confirmLabel="确认离开"
+          tone="danger"
+          onCancel={() => {
+            setLeaveConfirm(false)
+            blocker.reset()
+          }}
+          onConfirm={() => {
+            setLeaveConfirm(false)
+            blocker.proceed()
+          }}
+        />
       )}
     </>
   )

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { SiteGalleryImage } from '@core/api/site'
 import { api, csrfHeader } from '@core/api/client'
+import ConfirmDialog from '@core/components/ConfirmDialog'
 import type { SectionEditorProps } from '@core/site-sections/contract'
 
 interface GalleryResponse {
@@ -46,6 +47,7 @@ export default function GalleryEditor({
   const [busyID, setBusyID] = useState<number | null>(null)
   const [uploading, setUploading] = useState(false)
   const [message, setMessage] = useState('')
+  const [pendingDelete, setPendingDelete] = useState<SiteGalleryImage | null>(null)
 
   const load = useCallback(async () => {
     if (section.id <= 0) {
@@ -122,7 +124,7 @@ export default function GalleryEditor({
   }
 
   const deleteImage = async (image: SiteGalleryImage) => {
-    if (!canWrite || !window.confirm(`确认删除「${image.title || '未命名图片'}」？`)) return
+    if (!canWrite) return
     setBusyID(image.id)
     setMessage('')
     try {
@@ -241,7 +243,7 @@ export default function GalleryEditor({
                         className="mini-btn danger"
                         type="button"
                         disabled={!canWrite || busyID !== null}
-                        onClick={() => void deleteImage(image)}
+                        onClick={() => setPendingDelete(image)}
                       >
                         删除
                       </button>
@@ -254,6 +256,24 @@ export default function GalleryEditor({
         </>
       )}
       {message && <p className="gallery-admin-message" role="status">{message}</p>}
+      {pendingDelete && (
+        <ConfirmDialog
+          title={`删除「${pendingDelete.title || '未命名图片'}」？`}
+          message="图片会从当前图集中移除。"
+          details={[
+            '若文件仍被其他内容引用，服务端会保留媒体文件',
+            '当前图集引用会一并解除',
+          ]}
+          confirmLabel="确认删除"
+          tone="danger"
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => {
+            const image = pendingDelete
+            setPendingDelete(null)
+            void deleteImage(image)
+          }}
+        />
+      )}
     </div>
   )
 }

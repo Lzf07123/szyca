@@ -13,10 +13,18 @@ function randomize(text: string) {
   ))
 }
 
-export default function ScrambleText({ text, delay = 0 }: { text: string; delay?: number }) {
+export default function ScrambleText({
+  text,
+  delay = 0,
+  minLength = 3,
+}: {
+  text: string
+  delay?: number
+  minLength?: number
+}) {
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   const correct = Array.from(text)
-  const eligible = correct.length >= 3 && correct.length <= 16
+  const eligible = correct.length >= minLength && correct.length <= 16
   const [visible, setVisible] = useState<string[]>(() => (
     eligible && !reducedMotion ? randomize(text) : correct
   ))

@@ -11,7 +11,9 @@
   "feature_write_capability": "lottery.configure",
   "requires": ["quiz"],
   "routes": [
-    { "path": "/lottery", "feature": "lottery" },
+    { "path": "/lottery", "feature": "lottery", "fullscreen": true },
+    { "path": "/lottery/participate", "feature": "lottery" },
+    { "path": "/api/lottery/board" },
     { "path": "/api/lottery/campaign" },
     { "path": "/api/lottery/draw" },
     { "path": "/api/lottery/me" }
@@ -23,17 +25,17 @@
       "scope": "home",
       "layout": "module-card",
       "home_order": 50,
-      "label": "抽奖信息",
-      "description": "参与抽奖的模块卡片，可重复添加为多个活动入口。",
+      "label": "号码抽奖",
+      "description": "现场号码开奖大屏的模块入口，可重复添加为多个活动卡片。",
       "feature": "lottery",
       "repeatable": true,
       "max_instances": 0,
       "summary_field": "title",
       "default_config": {
-        "eyebrow": "现场福利",
-        "title": "抽奖信息",
-        "body": "完成答题后参与现场抽奖。",
-        "action_label": "查看活动",
+        "eyebrow": "现场开奖",
+        "title": "号码抽奖",
+        "body": "现场号码抽奖将在大屏实时公布中奖结果。",
+        "action_label": "查看大屏",
         "action_to": "/lottery"
       },
       "fields": [

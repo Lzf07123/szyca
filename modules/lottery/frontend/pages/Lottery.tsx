@@ -36,6 +36,7 @@ const errorCopy: Record<string, string> = {
   already_drawn: '你已经参与过这个活动，每个账号仅可抽取一次。',
   campaign_not_active: '活动尚未开始、已暂停或已经结束。',
   feature_disabled: '抽奖模块当前未开放。',
+  mode_disabled: '个人抽奖当前未开放，请关注现场号码开奖大屏。',
   rate_limited: '操作过于频繁，请稍后重试。',
 }
 
@@ -219,7 +220,7 @@ export default function Lottery() {
           ) : (
             <div className="lottery-empty">
               <strong>活动尚未配置</strong>
-              <p>管理员开放活动后会在这里显示奖品与参与条件。</p>
+              <p>活动开放后会在这里显示奖品与参与条件。</p>
             </div>
           )}
             {message && <p className="form-success" role="status">{message}</p>}

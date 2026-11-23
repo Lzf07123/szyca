@@ -126,6 +126,23 @@ def set_lottery_feature(admin: admin_api.Session, enabled: bool) -> None:
     expect(status, payload, 200, f"set lottery feature {enabled}")
 
 
+def set_lottery_modes(
+    admin: admin_api.Session,
+    *,
+    screen_enabled: bool,
+    personal_enabled: bool,
+) -> None:
+    status, payload, _ = admin.call(
+        "PUT",
+        "/api/admin/lottery/modes",
+        body={
+            "screen_enabled": screen_enabled,
+            "personal_enabled": personal_enabled,
+        },
+    )
+    expect(status, payload, 200, "set lottery modes")
+
+
 def create_campaign(admin: admin_api.Session, name: str) -> dict:
     now = datetime.now(timezone.utc)
     status, payload, _ = admin.call(
@@ -275,6 +292,7 @@ def main() -> None:
     status, payload = user_http("GET", "/api/lottery/campaign")
     assert status == 404 and payload.get("code") == "feature_disabled", payload
     set_lottery_feature(admin, True)
+    set_lottery_modes(admin, screen_enabled=True, personal_enabled=True)
 
     status, payload = user_http("POST", "/api/admin/quiz-state", {"state": "start"}, token=None)
     assert status == 401, "quiz state unexpectedly accepted without admin access"

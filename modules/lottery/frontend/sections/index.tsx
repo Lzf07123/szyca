@@ -14,10 +14,10 @@ function LotteryModule({ section, context }: SectionRendererProps) {
       id={sectionAnchor('lottery', section, context)}
       kind="lottery"
       number={context.ordinal}
-      title={sectionConfigText(config, 'title') || '招新抽奖'}
-      description={sectionConfigText(config, 'body') || '完成一轮答题即可参与，结果由服务端公平生成。'}
+      title={sectionConfigText(config, 'title') || '号码抽奖'}
+      description={sectionConfigText(config, 'body') || '现场号码抽奖将在大屏实时公布中奖结果。'}
       to={sectionConfigText(config, 'action_to') || '/lottery'}
-      openLabel={sectionConfigText(config, 'action_label') || '查看活动'}
+      openLabel={sectionConfigText(config, 'action_label') || '查看大屏'}
     />
   )
 }

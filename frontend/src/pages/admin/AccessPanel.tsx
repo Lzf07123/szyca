@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
+import ConfirmDialog from '../../components/ConfirmDialog'
 
 interface Account {
   id: number
@@ -24,6 +25,7 @@ export default function AccessPanel({ onMessage }: { onMessage: (message: string
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const [pendingDisable, setPendingDisable] = useState<Account | null>(null)
 
   const load = async () => {
     setLoading(true)
@@ -63,9 +65,6 @@ export default function AccessPanel({ onMessage }: { onMessage: (message: string
   }
 
   const toggleAccount = async (account: Account) => {
-    if (account.disabled === false && !window.confirm(`确定停用 ${account.username}？该账号的现有会话会立即失效。`)) {
-      return
-    }
     try {
       await api(`/api/admin/accounts/${account.id}/disabled`, {
         method: 'POST',
@@ -76,6 +75,14 @@ export default function AccessPanel({ onMessage }: { onMessage: (message: string
     } catch (cause) {
       onMessage((cause as Error).message, true)
     }
+  }
+
+  const requestToggleAccount = (account: Account) => {
+    if (!account.disabled) {
+      setPendingDisable(account)
+      return
+    }
+    void toggleAccount(account)
   }
 
   return (
@@ -105,7 +112,7 @@ export default function AccessPanel({ onMessage }: { onMessage: (message: string
                 <span className={`status-chip${account.disabled ? ' off' : ''}`}>
                   {account.disabled ? '已停用' : '启用中'}
                 </span>
-                <button className="mini-btn" type="button" onClick={() => void toggleAccount(account)}>
+                <button className="mini-btn" type="button" onClick={() => requestToggleAccount(account)}>
                   {account.disabled ? '启用' : '停用'}
                 </button>
               </div>
@@ -161,6 +168,24 @@ export default function AccessPanel({ onMessage }: { onMessage: (message: string
           {busy ? '创建中…' : '创建账号'}
         </button>
       </section>
+      {pendingDisable && (
+        <ConfirmDialog
+          title={`停用管理员 ${pendingDisable.username}？`}
+          message="该账号的现有后台会话会立即失效，并将无法继续登录。"
+          details={[
+            '账号数据与审计记录会保留',
+            '后续可重新启用以恢复登录权限',
+          ]}
+          confirmLabel="确认停用"
+          tone="danger"
+          onCancel={() => setPendingDisable(null)}
+          onConfirm={() => {
+            const account = pendingDisable
+            setPendingDisable(null)
+            void toggleAccount(account)
+          }}
+        />
+      )}
     </div>
   )
 }

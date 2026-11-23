@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, csrfHeader } from '@core/api/client'
+import ConfirmDialog from '@core/components/ConfirmDialog'
 
 interface Qrcode {
   id: number
@@ -18,6 +19,7 @@ export default function JoinAdmin({
   const [items, setItems] = useState<Qrcode[]>([])
   const [titles, setTitles] = useState<Record<number, string>>({})
   const [newTitle, setNewTitle] = useState('')
+  const [pendingDelete, setPendingDelete] = useState<Qrcode | null>(null)
 
   const load = async () => {
     try {
@@ -93,7 +95,6 @@ export default function JoinAdmin({
   }
 
   const remove = async (item: Qrcode) => {
-    if (!window.confirm(`确定删除二维码「${item.title || `#${item.id}`}」？此操作不可恢复。`)) return
     try {
       await api(`/api/admin/qrcodes/${item.id}`, { method: 'DELETE' })
       onMessage('二维码已删除')
@@ -156,12 +157,27 @@ export default function JoinAdmin({
               <button className="mini-btn" type="button" onClick={() => void update(item, { active: !item.active })}>
                 {item.active ? '停用' : '启用'}
               </button>
-              <button className="mini-btn danger" type="button" onClick={() => void remove(item)}>删除</button>
+              <button className="mini-btn danger" type="button" onClick={() => setPendingDelete(item)}>删除</button>
             </span>
           </li>
         ))}
         {items.length === 0 && <li className="muted">暂无二维码，上传后「加入我们」页即可扫码</li>}
       </ul>
+      {pendingDelete && (
+        <ConfirmDialog
+          title={`删除二维码「${pendingDelete.title || `#${pendingDelete.id}`}」？`}
+          message="二维码记录和对应媒体文件将从后台移除。"
+          details={['此操作不可恢复']}
+          confirmLabel="确认删除"
+          tone="danger"
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => {
+            const item = pendingDelete
+            setPendingDelete(null)
+            void remove(item)
+          }}
+        />
+      )}
     </div>
   )
 }

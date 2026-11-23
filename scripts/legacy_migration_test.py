@@ -243,6 +243,8 @@ def main() -> None:
             "0004_section_plugins.sql",
             "0005_gallery.sql",
             "202611240001_screen_section.sql",
+            "202611240002_lottery_number_board.sql",
+            "202611240003_lottery_public_copy.sql",
         ], versions
         assert psql(
             "SELECT count(*) FROM information_schema.columns "
@@ -258,6 +260,16 @@ def main() -> None:
         assert psql(
             "SELECT plugin_version FROM home_sections WHERE kind = 'gallery' LIMIT 1"
         ).stdout.strip() == "2"
+        assert psql(
+            "SELECT to_regclass('public.lottery_number_events') IS NOT NULL"
+        ).stdout.strip() == "t"
+        assert psql(
+            "SELECT screen_enabled || ':' || personal_enabled "
+            "FROM lottery_mode_settings WHERE id = 1"
+        ).stdout.strip() == "true:false"
+        assert psql(
+            "SELECT config->>'body' FROM home_sections WHERE kind = 'lottery' LIMIT 1"
+        ).stdout.strip() == "现场号码抽奖将在大屏实时公布中奖结果。"
 
         config = run(["docker", "exec", APP, "wget", "-qO-", "http://127.0.0.1:8095/api/config"])
         site = run(["docker", "exec", APP, "wget", "-qO-", "http://127.0.0.1:8095/api/site"])
@@ -276,7 +288,7 @@ def main() -> None:
         assert versions_after == versions
 
         print(
-            "legacy migration ok: pre-seeded data preserved, 6 migrations recorded once, "
+            "legacy migration ok: pre-seeded data preserved, 8 migrations recorded once, "
             "failed transaction rolled back, restart idempotent"
         )
     finally:

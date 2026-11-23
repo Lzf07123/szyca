@@ -9,7 +9,7 @@ import (
 
 func (m *module) RegisterHTTP(mux *http.ServeMux, api contract.HTTP) error {
 	mux.HandleFunc("GET /ws", api.AnyFeature(
-		[]string{"quiz", "screen"},
+		[]string{"quiz", "screen", "lottery"},
 		Serve(m.service.Hub(), api.ValidateToken, api.WSAllowedOrigins()),
 	))
 	mux.HandleFunc("POST /api/admin/announce", api.Permission("quiz.operate", func(

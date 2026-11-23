@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, csrfHeader } from '@core/api/client'
+import ConfirmDialog from '@core/components/ConfirmDialog'
 
 interface Question {
   id: number
@@ -28,6 +29,7 @@ export default function QuizAdmin({ canWrite, onMessage }: QuizAdminProps) {
   const [score, setScore] = useState(10)
   const [newDifficulty, setNewDifficulty] = useState('简单')
   const [busy, setBusy] = useState(false)
+  const [confirmClear, setConfirmClear] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -118,7 +120,6 @@ export default function QuizAdmin({ canWrite, onMessage }: QuizAdminProps) {
   }
 
   const clearQuestions = async () => {
-    if (!window.confirm(`确定清空全部 ${questions.length} 道题目？答题记录和排行榜会保留。`)) return
     try {
       const result = await api<{ questions_deleted: number }>('/api/admin/questions', {
         method: 'DELETE',
@@ -138,7 +139,7 @@ export default function QuizAdmin({ canWrite, onMessage }: QuizAdminProps) {
           <p className="muted">启用中 {questions.filter((question) => question.active).length} 题 · 当前筛选 {filtered.length} 题</p>
         </div>
         {canWrite && (
-          <button className="mini-btn danger" type="button" onClick={() => void clearQuestions()}>
+          <button className="mini-btn danger" type="button" onClick={() => setConfirmClear(true)}>
             一键清空题库
           </button>
         )}
@@ -266,6 +267,23 @@ export default function QuizAdmin({ canWrite, onMessage }: QuizAdminProps) {
           )}
         </div>
       </div>
+      {confirmClear && (
+        <ConfirmDialog
+          title={`清空全部 ${questions.length} 道题目？`}
+          message="题库内容将被永久删除。"
+          details={[
+            '答题记录和排行榜数据会保留',
+            '此操作不可恢复',
+          ]}
+          confirmLabel="确认清空"
+          tone="danger"
+          onCancel={() => setConfirmClear(false)}
+          onConfirm={() => {
+            setConfirmClear(false)
+            void clearQuestions()
+          }}
+        />
+      )}
     </div>
   )
 }

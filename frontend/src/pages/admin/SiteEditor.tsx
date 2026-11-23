@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../../api/client'
+import ConfirmDialog from '../../components/ConfirmDialog'
 import type {
   SectionConfig,
   SectionItem,
@@ -358,6 +359,7 @@ export default function SiteEditor({
   const [deletedSections, setDeletedSections] = useState<ManagedSection[]>([])
   const [expandedSectionID, setExpandedSectionID] = useState<number | null>(null)
   const [showSectionPicker, setShowSectionPicker] = useState(false)
+  const [pendingSectionDelete, setPendingSectionDelete] = useState<ManagedSection | null>(null)
   const nextDraftID = useRef(-1)
   const featuresDirty = useMemo(
     () => savedFeatures !== null && featureSignature(features) !== featureSignature(savedFeatures),
@@ -493,14 +495,10 @@ export default function SiteEditor({
 
   const removeSection = (section: ManagedSection) => {
     if (!canWrite) return
-    const plugin = manifestFor(section)
-    const label = plugin?.label || section.kind
-    const prompt = section.id > 0
-      ? section.status === 'published'
-        ? `确认删除「${label}」实例 #${section.id}？保存编排后，公开首页会立即移除该实例。`
-        : `确认删除「${label}」实例 #${section.id}？该实例的配置会一并删除。`
-      : `确认移除尚未保存的「${label}」实例？`
-    if (!window.confirm(prompt)) return
+    setPendingSectionDelete(section)
+  }
+
+  const confirmRemoveSection = (section: ManagedSection) => {
     setSections((current) => current.filter((candidate) => candidate.id !== section.id))
     if (section.id > 0) {
       setDeletedSections((current) => [
@@ -917,6 +915,25 @@ export default function SiteEditor({
           )}
         </div>
       </section>
+      {pendingSectionDelete && (
+        <ConfirmDialog
+          title={`删除「${manifestFor(pendingSectionDelete)?.label || pendingSectionDelete.kind}」实例？`}
+          message={pendingSectionDelete.id > 0
+            ? '该实例会进入待删除状态，保存编排后正式移除。'
+            : '该实例尚未保存，确认后会立即从编辑区移除。'}
+          details={pendingSectionDelete.id > 0 && pendingSectionDelete.status === 'published'
+            ? ['保存编排后，公开首页会立即移除该实例', '该实例配置会一并删除']
+            : ['该实例配置会一并删除']}
+          confirmLabel={pendingSectionDelete.id > 0 ? '加入删除列表' : '确认移除'}
+          tone="danger"
+          onCancel={() => setPendingSectionDelete(null)}
+          onConfirm={() => {
+            const section = pendingSectionDelete
+            setPendingSectionDelete(null)
+            confirmRemoveSection(section)
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -85,6 +85,8 @@ def main() -> None:
         "0004_section_plugins.sql",
         "0005_gallery.sql",
         "202611240001_screen_section.sql",
+        "202611240002_lottery_number_board.sql",
+        "202611240003_lottery_public_copy.sql",
     ], versions
     assert psql(
         "SELECT count(*) FROM information_schema.columns "
@@ -96,6 +98,16 @@ def main() -> None:
     assert psql(
         "SELECT plugin_version FROM home_sections WHERE kind = 'gallery' LIMIT 1"
     ) == "2"
+    assert psql(
+        "SELECT to_regclass('public.lottery_number_events') IS NOT NULL"
+    ) == "t"
+    assert psql(
+        "SELECT screen_enabled || ':' || personal_enabled "
+        "FROM lottery_mode_settings WHERE id = 1"
+    ) == "true:false"
+    assert psql(
+        "SELECT config->>'body' FROM home_sections WHERE kind = 'lottery' LIMIT 1"
+    ) == "现场号码抽奖将在大屏实时公布中奖结果。"
 
     before = data_counts()
     container_id = subprocess.run(
@@ -114,7 +126,7 @@ def main() -> None:
     versions_after = psql("SELECT version FROM schema_migrations ORDER BY version").splitlines()
     assert versions_after == versions, "migrations were applied twice"
     print(
-        "migration ok: six versions applied once; restart retained "
+        "migration ok: eight versions applied once; restart retained "
         + json.dumps(after, ensure_ascii=False, sort_keys=True)
     )
 

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { api, clearCSRFToken, csrfHeader, setCSRFToken } from '../api/client'
 import { setFavicon, useSite } from '../api/site'
+import ConfirmDialog from '../components/ConfirmDialog'
 import { usePageMeta } from '../components/PageMeta'
 import { MODULE_CATALOG } from '../generated/catalog.generated'
 import { MODULE_RUNTIMES } from '../modules/registry.generated'
@@ -41,6 +42,14 @@ interface AdminAccount {
   role: 'owner' | 'content_editor' | 'event_operator' | 'data_viewer'
   capabilities: string[]
   legacy: boolean
+}
+
+interface AdminConfirmRequest {
+  title: string
+  message: string
+  confirmLabel: string
+  tone?: 'primary' | 'danger'
+  action: () => void | Promise<void>
 }
 
 type AdminTab = string
@@ -92,6 +101,7 @@ export default function Admin() {
   const navToggleRef = useRef<HTMLButtonElement>(null)
   const adminContentRef = useRef<HTMLDivElement>(null)
   const [wipe, setWipe] = useState<{ step: 'ask' | 'final' } | null>(null)
+  const [confirmRequest, setConfirmRequest] = useState<AdminConfirmRequest | null>(null)
   const [qState, setQState] = useState<'start' | 'stop'>('stop')
   const [msg, setMsg] = useState('')
   const [dataErrors, setDataErrors] = useState<Record<string, string>>({})
@@ -120,10 +130,7 @@ export default function Admin() {
     setQuizState: setQState,
   }), [can, reloadSite])
 
-  const selectTab = useCallback((next: AdminTab) => {
-    if (tab === 'site' && next !== 'site' && siteDirty && !window.confirm('站点内容还有未保存修改。离开后这些修改将丢失，确定继续吗？')) {
-      return
-    }
+  const applyTab = useCallback((next: AdminTab) => {
     setTab(next)
     setNavOpen(false)
     setMsg((current) => current.startsWith('✔') ? '' : current)
@@ -137,7 +144,21 @@ export default function Admin() {
       else updated.set('tab', next)
       return updated
     }, { replace: true })
-  }, [setSearchParams, siteDirty, tab])
+  }, [setSearchParams])
+
+  const selectTab = useCallback((next: AdminTab) => {
+    if (tab === 'site' && next !== 'site' && siteDirty) {
+      setConfirmRequest({
+        title: '离开站点内容编辑？',
+        message: '当前有未保存的站点内容修改，离开后这些修改将丢失。',
+        confirmLabel: '放弃修改并离开',
+        tone: 'danger',
+        action: () => applyTab(next),
+      })
+      return
+    }
+    applyTab(next)
+  }, [applyTab, siteDirty, tab])
 
   useEffect(() => {
     if (!msg || !msg.startsWith('✔')) return
@@ -240,10 +261,7 @@ export default function Admin() {
     }
   }
 
-  const logout = async () => {
-    if (siteDirty && !window.confirm('站点内容还有未保存修改。退出登录会丢失这些修改，确定继续吗？')) {
-      return
-    }
+  const performLogout = async () => {
     try {
       await api('/api/admin/auth/logout', { method: 'POST' })
     } catch {
@@ -256,6 +274,20 @@ export default function Admin() {
     setOverviewUpdatedAt(null)
     setDataErrors({})
     setPassword('')
+  }
+
+  const logout = () => {
+    if (siteDirty) {
+      setConfirmRequest({
+        title: '退出后台登录？',
+        message: '站点内容还有未保存修改，退出登录后这些修改将丢失。',
+        confirmLabel: '退出登录',
+        tone: 'danger',
+        action: performLogout,
+      })
+      return
+    }
+    void performLogout()
   }
 
   const loadOverview = useCallback(async () => {
@@ -428,8 +460,7 @@ export default function Admin() {
     }
   }
 
-  const delBg = async (b: Bg) => {
-    if (!window.confirm(`确定删除背景图「${b.file_path.split('/').pop() || b.id}」？此操作不可恢复。`)) return
+  const deleteBackground = async (b: Bg) => {
     try {
       await api(`/api/admin/backgrounds/${b.id}`, { method: 'DELETE' })
       setMsg('✔ 背景已删除')
@@ -437,6 +468,17 @@ export default function Admin() {
     } catch (e) {
       setMsg(`✘ ${(e as Error).message}`)
     }
+  }
+
+  const requestDeleteBackground = (background: Bg) => {
+    const filename = background.file_path.split('/').pop() || background.id
+    setConfirmRequest({
+      title: `删除背景图「${filename}」？`,
+      message: '图片文件将从数据卷移除，此操作不可恢复。',
+      confirmLabel: '确认删除',
+      tone: 'danger',
+      action: () => deleteBackground(background),
+    })
   }
 
   // 站点 Logo：上传即保存；可一键恢复内置样式
@@ -544,7 +586,7 @@ export default function Admin() {
     quickActions.push({
       tab: 'lottery',
       label: '活动运营',
-      description: '配置资格与库存，处理领取核销和结果导出',
+      description: '配置号码大屏与个人抽取，执行逐级开奖和结果导出',
       meta: '活动工作台',
     })
   }
@@ -861,7 +903,7 @@ export default function Admin() {
                     <button className="mini-btn" onClick={() => void toggleBg(b)}>
                       {b.active ? '停用' : '启用'}
                     </button>
-                    <button className="mini-btn danger" onClick={() => void delBg(b)}>
+                    <button className="mini-btn danger" onClick={() => requestDeleteBackground(b)}>
                       删除
                     </button>
                   </span>}
@@ -1014,6 +1056,20 @@ export default function Admin() {
             )}
           </div>
         </div>
+      )}
+      {confirmRequest && (
+        <ConfirmDialog
+          title={confirmRequest.title}
+          message={confirmRequest.message}
+          confirmLabel={confirmRequest.confirmLabel}
+          tone={confirmRequest.tone}
+          onCancel={() => setConfirmRequest(null)}
+          onConfirm={() => {
+            const action = confirmRequest.action
+            setConfirmRequest(null)
+            void action()
+          }}
+        />
       )}
     </section>
   )

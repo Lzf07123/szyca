@@ -7,11 +7,13 @@ import (
 	"szyca/backend/contract"
 	"szyca/backend/core/config"
 	"szyca/backend/core/modulecatalog"
+	"szyca/backend/core/publish"
 	"szyca/backend/core/store"
 )
 
 type module struct {
 	service *Service
+	number  *NumberService
 }
 
 var _ contract.HTTPModule = (*module)(nil)
@@ -29,7 +31,14 @@ func NewModule(deps contract.Dependencies) (contract.Module, error) {
 	if !ok {
 		return nil, errors.New("lottery module requires config")
 	}
-	return &module{service: New(st.Pool(), eligibility, cfg.QuizCount)}, nil
+	pub, ok := deps.Core["publish"].(*publish.Pub)
+	if !ok {
+		return nil, errors.New("lottery module requires publish")
+	}
+	return &module{
+		service: New(st.Pool(), eligibility, cfg.QuizCount),
+		number:  NewNumberService(st.Pool(), pub),
+	}, nil
 }
 
 func (m *module) Manifest() contract.Manifest {

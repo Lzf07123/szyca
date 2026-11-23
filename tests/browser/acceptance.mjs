@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import { chromium } from 'playwright'
 import axe from 'axe-core'
 
@@ -15,6 +16,9 @@ const moduleCatalog = JSON.parse(await fs.readFile(
 ))
 const sectionLayouts = new Map(moduleCatalog.modules.flatMap((module) => (
   module.sections.map((section) => [`${section.key}@${section.version}`, section.layout])
+)))
+const fullscreenRoutes = new Set(moduleCatalog.modules.flatMap((module) => (
+  module.routes.filter((route) => route.fullscreen).map((route) => route.path)
 )))
 
 async function loadModuleScenarios() {
@@ -147,6 +151,96 @@ async function ensureCampaign(admin) {
   return campaign.id
 }
 
+async function setLotteryModes(admin, { screen, personal }) {
+  const response = await api('/api/admin/lottery/modes', {
+    method: 'PUT',
+    cookie: admin.cookie,
+    csrf: admin.csrf,
+    body: { screen_enabled: screen, personal_enabled: personal },
+  })
+  expect(response.status === 200, `set lottery modes failed: ${JSON.stringify(response.payload)}`)
+}
+
+async function ensureNumberEvent(admin) {
+  const listed = await api('/api/admin/lottery/number-events', { cookie: admin.cookie })
+  expect(listed.status === 200, `list number events failed: ${JSON.stringify(listed.payload)}`)
+  for (const event of listed.payload.events) {
+    if (event.status === 'live') {
+      const archived = await api(`/api/admin/lottery/number-events/${event.id}/archive`, {
+        method: 'POST',
+        cookie: admin.cookie,
+        csrf: admin.csrf,
+      })
+      expect(archived.status === 200, `archive old number event failed: ${JSON.stringify(archived.payload)}`)
+    }
+  }
+  const created = await api('/api/admin/lottery/number-events', {
+    method: 'POST',
+    cookie: admin.cookie,
+    csrf: admin.csrf,
+    body: {
+      name: `浏览器号码场次-${Math.random().toString(16).slice(2, 8)}`,
+      range_start: '1',
+      range_end: '30',
+      number_width: 3,
+      levels: [
+        { name: '三等奖', winner_count: 3 },
+        { name: '二等奖', winner_count: 2 },
+        { name: '一等奖', winner_count: 2 },
+      ],
+    },
+  })
+  expect(created.status === 200, `create number event failed: ${JSON.stringify(created.payload)}`)
+  const published = await api(`/api/admin/lottery/number-events/${created.payload.event.id}/publish`, {
+    method: 'POST',
+    cookie: admin.cookie,
+    csrf: admin.csrf,
+  })
+  expect(published.status === 200, `publish number event failed: ${JSON.stringify(published.payload)}`)
+  const firstLevel = published.payload.levels[0]
+  const secondLevel = published.payload.levels[1]
+  const thirdLevel = published.payload.levels[2]
+  const firstDraw = await api(`/api/admin/lottery/number-events/${created.payload.event.id}/draw`, {
+    method: 'POST',
+    cookie: admin.cookie,
+    csrf: admin.csrf,
+    body: { level_id: firstLevel.id, request_id: randomUUID() },
+  })
+  expect(firstDraw.status === 200, `draw first number level failed: ${JSON.stringify(firstDraw.payload)}`)
+  const switchName = `浏览器切换场次-${Math.random().toString(16).slice(2, 8)}`
+  const switchDraft = await api('/api/admin/lottery/number-events', {
+    method: 'POST',
+    cookie: admin.cookie,
+    csrf: admin.csrf,
+    body: {
+      name: switchName,
+      range_start: '1',
+      range_end: '50',
+      number_width: 2,
+      levels: [{ name: '一等奖', winner_count: 1 }],
+    },
+  })
+  expect(switchDraft.status === 200, `create switch draft event failed: ${JSON.stringify(switchDraft.payload)}`)
+  return {
+    id: created.payload.event.id,
+    name: created.payload.event.name,
+    secondLevelID: secondLevel.id,
+    thirdLevelID: thirdLevel.id,
+    switchDraftID: switchDraft.payload.event.id,
+    switchName,
+  }
+}
+
+async function drawNumberLevel(admin, eventID, levelID) {
+  const response = await api(`/api/admin/lottery/number-events/${eventID}/draw`, {
+    method: 'POST',
+    cookie: admin.cookie,
+    csrf: admin.csrf,
+    body: { level_id: levelID, request_id: randomUUID() },
+  })
+  expect(response.status === 200, `draw number level failed: ${JSON.stringify(response.payload)}`)
+}
+
 async function attachDiagnostics(page, label) {
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(`${label}: console ${message.text()}`)
@@ -197,12 +291,15 @@ async function assertReadableText(page, label) {
       '.lottery-copy',
       '.public-footer .footer-brand',
       '.lottery-card',
+      '.lottery-screen-titlebar',
+      '.lottery-result-level',
       '.quiz-wrap',
       '.state-page h1',
       '.screen-head',
       '.srow',
       '.admin-top',
       '.panel-head',
+      '.number-event-item',
     ]
     return Array.from(document.querySelectorAll(selectors.join(',')))
       .filter((element) => {
@@ -471,6 +568,7 @@ async function main() {
   const originalLotterySection = await setLotterySection(admin, false)
   const campaignID = await ensureCampaign(admin)
   const offModuleCount = await expectedHomeModuleCount()
+  let numberEvent = null
 
   const browser = await chromium.launch({
     headless: true,
@@ -569,6 +667,8 @@ async function main() {
 
     await setLotterySection(admin, true)
     await setLottery(admin, true)
+    await setLotteryModes(admin, { screen: true, personal: false })
+    numberEvent = await ensureNumberEvent(admin)
     const onModuleCount = await expectedHomeModuleCount()
     expect(onModuleCount === offModuleCount + 1, `lottery should add one module card: ${offModuleCount} -> ${onModuleCount}`)
     for (const width of widths) {
@@ -582,6 +682,10 @@ async function main() {
       await assertCosmosHome(page, `home-on-${width}`, onModuleCount)
       expect(await page.locator('#site-navigation a[href="/lottery"]').count() === 1, `home-on-${width}: lottery nav missing`)
       expect(await page.locator('#lottery').count() === 1, `home-on-${width}: lottery section missing`)
+      expect(
+        !/管理员|后台/.test(await page.locator('#lottery').innerText()),
+        `home-on-${width}: public lottery card exposes admin wording`,
+      )
       await revealForScreenshot(page)
       await page.screenshot({ path: `${ARTIFACTS}/screenshots/home-on-${width}.jpg`, fullPage: true, type: 'jpeg', quality: 78 })
       await context.close()
@@ -591,12 +695,17 @@ async function main() {
       ...(await loadModuleScenarios()).map((scenario) => [scenario.path, scenario.title]),
       ['/not-a-page', '页面不存在 · 计算机协会'],
     ]
-    const routeWidths = [320, 390, 768, 1024, 1440]
+    const routeWidths = [320, 390, 768, 1024, 1440, 1920]
     const titles = new Set()
     for (const width of routeWidths) {
       for (const [path, expected] of pages) {
         const label = `route-${path}-${width}`
-        const context = await browser.newContext({ viewport: { width, height: width <= 390 ? 844 : 900 } })
+        const context = await browser.newContext({
+          viewport: {
+            width,
+            height: width <= 390 ? 844 : width === 1920 ? 1080 : 900,
+          },
+        })
         const page = await context.newPage()
         await attachDiagnostics(page, label)
         await page.goto(BASE + path, { waitUntil: 'networkidle' })
@@ -605,8 +714,8 @@ async function main() {
         titles.add(title)
         await assertNoOverflow(page, label)
         await assertReadableText(page, label)
-        if (path !== '/screen') await assertFramedChrome(page, label)
-        if (['/join', '/quiz', '/lottery'].includes(path)) {
+        if (!fullscreenRoutes.has(path)) await assertFramedChrome(page, label)
+        if (['/join', '/quiz', '/lottery/participate'].includes(path)) {
           const intro = await page.locator('.page-intro').evaluate((element) => {
             const style = getComputedStyle(element)
             const title = getComputedStyle(element.querySelector('h1'))
@@ -625,7 +734,27 @@ async function main() {
           expect(intro.width <= 760, `${label}: page intro is too wide`)
           expect(intro.titleSize <= 56, `${label}: page intro title is too large (${intro.titleSize}px)`)
         }
-        if (path === '/lottery' && [390, 768, 1440].includes(width)) {
+        if (path === '/lottery' && [390, 768, 1440, 1920].includes(width)) {
+          expect(
+            await page.locator('.lottery-screen').getByRole('button').count() === 0,
+            `${label}: public lottery screen exposed a button`,
+          )
+          expect(
+            await page.getByText(/开始抽奖|开始抽取/).count() === 0,
+            `${label}: public lottery screen exposed draw controls`,
+          )
+          expect(
+            !/管理员|后台/.test(await page.locator('.lottery-screen').innerText()),
+            `${label}: public lottery screen exposes admin wording`,
+          )
+          expect(
+            await page.locator('.lottery-screen-home, .lottery-screen-foot').count() === 0,
+            `${label}: public lottery screen still has return/footer chrome`,
+          )
+          expect(
+            await page.locator('.lottery-screen-brand img, .lottery-screen-brand .logo-mark').count() === 1,
+            `${label}: public lottery screen is missing the brand logo`,
+          )
           await revealForScreenshot(page)
           await page.screenshot({
             path: `${ARTIFACTS}/screenshots/lottery-on-${width}.jpg`,
@@ -649,10 +778,77 @@ async function main() {
         if (path === '/lottery' && width === 390) {
           await axeCheck(page, 'lottery')
         }
+        if (path === '/lottery/participate' && width === 390) {
+          expect(
+            await page.getByRole('button', { name: /开始抽奖|参与抽取/ }).count() === 0,
+            `${label}: disabled personal mode exposed a draw button`,
+          )
+          await axeCheck(page, 'lottery-participate')
+        }
         await context.close()
       }
     }
     expect(titles.size === pages.length, 'public page titles are not unique')
+
+    const reducedLiveContext = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      reducedMotion: 'reduce',
+    })
+    const reducedLivePage = await reducedLiveContext.newPage()
+    await attachDiagnostics(reducedLivePage, 'lottery-live-reduced-motion')
+    await reducedLivePage.goto(BASE + '/lottery', { waitUntil: 'networkidle' })
+    await reducedLivePage.locator('.lottery-result-level.revealed').first().waitFor({ state: 'visible' })
+    const reducedRevealWait = reducedLivePage
+      .locator('.lottery-result-level.revealed')
+      .nth(1)
+      .waitFor({ state: 'visible', timeout: 8000 })
+    await drawNumberLevel(admin, numberEvent.id, numberEvent.secondLevelID)
+    await reducedRevealWait
+    expect(
+      await reducedLivePage.locator('.lottery-sequence-stage').count() === 0,
+      'reduced motion number lottery screen rendered the sequential stage',
+    )
+    await reducedLiveContext.close()
+
+    const liveContext = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    const livePage = await liveContext.newPage()
+    await attachDiagnostics(livePage, 'lottery-live-reveal')
+    await livePage.goto(BASE + '/lottery', { waitUntil: 'networkidle' })
+    await livePage.locator('.lottery-result-level.revealed').first().waitFor({ state: 'visible' })
+    const sequenceWait = livePage.locator('.lottery-sequence-stage').waitFor({ state: 'visible', timeout: 8000 })
+    await drawNumberLevel(admin, numberEvent.id, numberEvent.thirdLevelID)
+    await sequenceWait
+    expect(
+      await livePage.locator('.lottery-sequence-stage').getAttribute('data-sequence-index') === '0',
+      'number lottery sequence did not start with the first winner',
+    )
+    await livePage.locator('.lottery-sequence-stage[data-sequence-index="1"]').waitFor({
+      state: 'visible',
+      timeout: 5000,
+    })
+    await livePage.locator('.lottery-sequence-stage').waitFor({ state: 'detached', timeout: 8000 })
+    expect(
+      await livePage.locator('.lottery-result-level.revealed').count() === 3,
+      'number lottery screen did not reveal all levels',
+    )
+    expect(
+      await livePage.locator('.lottery-winner-grid .scramble-char').count() > 0,
+      'number lottery winners do not use the shared scramble animation',
+    )
+    expect(
+      await livePage.getByText('本场已开完').count() === 1,
+      'number lottery screen did not show completed state',
+    )
+    await livePage.waitForTimeout(750)
+    await livePage.setViewportSize({ width: 1920, height: 1080 })
+    await assertNoOverflow(livePage, 'lottery-final-1920')
+    await livePage.screenshot({
+      path: `${ARTIFACTS}/screenshots/lottery-final-1920.jpg`,
+      fullPage: true,
+      type: 'jpeg',
+      quality: 84,
+    })
+    await liveContext.close()
 
     const landscapeContext = await browser.newContext({ viewport: { width: 844, height: 390 } })
     const landscapePage = await landscapeContext.newPage()
@@ -699,7 +895,8 @@ async function main() {
     await axeCheck(adminPage, 'admin-overview')
     await adminPage.getByRole('button', { name: /当前功能/ }).click()
     await adminPage.getByRole('button', { name: '抽奖', exact: true }).click()
-    await adminPage.getByText('抽奖总开关').waitFor({ state: 'visible' })
+    await adminPage.getByText('抽奖模块', { exact: true }).waitFor({ state: 'visible' })
+    await adminPage.getByText('号码开奖大屏', { exact: true }).first().waitFor({ state: 'visible' })
     await assertNoOverflow(adminPage, 'admin-lottery')
     await assertReadableText(adminPage, 'admin-lottery')
     await assertFramedChrome(adminPage, 'admin-lottery')
@@ -713,7 +910,80 @@ async function main() {
     expect(!storage.cookie.includes(ADMIN_PASSWORD), 'admin password leaked to visible cookie')
     await adminPage.screenshot({ path: `${ARTIFACTS}/screenshots/admin-lottery-390.jpg`, fullPage: true, type: 'jpeg', quality: 82 })
     await axeCheck(adminPage, 'admin-lottery')
+    await adminPage.getByRole('button', { name: '归档场次' }).click()
+    const dangerDialog = adminPage.getByRole('dialog')
+    await dangerDialog.waitFor({ state: 'visible' })
+    expect(
+      (await dangerDialog.getAttribute('class'))?.includes('confirm-dialog danger'),
+      'lottery archive confirmation does not use the built-in danger dialog',
+    )
+    await dangerDialog.getByRole('button', { name: '取消' }).click()
+    if (numberEvent) {
+      await adminPage.route(
+        /\/api\/admin\/lottery\/number-events\/\d+$/,
+        async (route) => {
+          await new Promise((resolve) => setTimeout(resolve, 800))
+          await route.continue()
+        },
+      )
+      const switchButton = adminPage.getByRole('button', {
+        name: new RegExp(numberEvent.switchName),
+      })
+      await switchButton.click()
+      await adminPage.locator('.number-event-item.loading').waitFor({ state: 'visible' })
+      expect(
+        await adminPage.locator('.number-live-panel').isVisible(),
+        'admin lottery detail collapsed while switching events',
+      )
+      await adminPage.getByText('编辑草稿', { exact: true }).waitFor({ state: 'visible' })
+      const levelName = adminPage
+        .locator('.number-level-row')
+        .first()
+        .locator('label')
+        .first()
+        .locator('input')
+      await levelName.fill('')
+      await levelName.pressSequentially('测试等级', { delay: 25 })
+      expect(
+        await levelName.inputValue() === '测试等级',
+        `admin lottery level name lost typing focus: ${await levelName.inputValue()}`,
+      )
+      await adminPage.getByRole('button', { name: '上线大屏' }).click()
+      const primaryDialog = adminPage.getByRole('dialog')
+      await primaryDialog.waitFor({ state: 'visible' })
+      expect(
+        (await primaryDialog.getAttribute('class'))?.includes('confirm-dialog primary'),
+        'lottery publish confirmation does not use the built-in primary dialog',
+      )
+      await primaryDialog.getByRole('button', { name: '取消' }).click()
+      await adminPage.unroute(/\/api\/admin\/lottery\/number-events\/\d+$/)
+    }
     await adminContext.close()
+
+    await setLottery(admin, true)
+    const archiveForStandby = await api(`/api/admin/lottery/number-events/${numberEvent.id}/archive`, {
+      method: 'POST',
+      cookie: admin.cookie,
+      csrf: admin.csrf,
+    })
+    expect(archiveForStandby.status === 200, `archive event for standby failed: ${JSON.stringify(archiveForStandby.payload)}`)
+    const standbyContext = await browser.newContext({ viewport: { width: 1920, height: 1080 } })
+    const standbyPage = await standbyContext.newPage()
+    await attachDiagnostics(standbyPage, 'lottery-standby')
+    await standbyPage.goto(BASE + '/lottery', { waitUntil: 'networkidle' })
+    await standbyPage.locator('.lottery-standby-facts').waitFor({ state: 'visible' })
+    expect(await standbyPage.locator('.lottery-standby-orbit').count() === 1, 'standby visual is missing')
+    expect(
+      await standbyPage.locator('.lottery-screen-home, .lottery-screen-foot').count() === 0,
+      'standby screen still has return/footer chrome',
+    )
+    await standbyPage.screenshot({
+      path: `${ARTIFACTS}/screenshots/lottery-standby-1920.jpg`,
+      fullPage: true,
+      type: 'jpeg',
+      quality: 84,
+    })
+    await standbyContext.close()
 
     const reduced = await browser.newContext({
       viewport: { width: 390, height: 844 },
@@ -750,13 +1020,40 @@ async function main() {
     await assertFutureUptimeFormat(browser)
 
     const unexpectedErrors = errors.filter(
-      (message) => !(message.startsWith('site-fallback: console Failed to load resource') && message.includes('ERR_FAILED')),
+      (message) => !(
+        (message.startsWith('site-fallback: console Failed to load resource') && message.includes('ERR_FAILED'))
+        || (
+          message.startsWith('route-/lottery/participate-')
+          && message.includes('console Failed to load resource')
+          && message.includes('404')
+        )
+      ),
     )
     expect(unexpectedErrors.length === 0, `browser diagnostics:\n${unexpectedErrors.join('\n')}`)
     console.log(`browser ok: ${widths.length} viewports x 2 module states + landscape, routes at ${routeWidths.length} widths, axe, keyboard, fallback, reduced motion; campaign ${campaignID}`)
   } finally {
     await browser.close()
     await setLotterySection(admin, originalLotterySection)
+    if (numberEvent) {
+      const archived = await api(`/api/admin/lottery/number-events/${numberEvent.id}/archive`, {
+        method: 'POST',
+        cookie: admin.cookie,
+        csrf: admin.csrf,
+      })
+      expect(
+        archived.status === 200 || archived.payload?.code === 'event_not_live',
+        'browser number event cleanup failed',
+      )
+      const deletedDraft = await api(`/api/admin/lottery/number-events/${numberEvent.switchDraftID}`, {
+        method: 'DELETE',
+        cookie: admin.cookie,
+        csrf: admin.csrf,
+      })
+      expect(
+        deletedDraft.status === 200 || deletedDraft.payload?.code === 'event_not_found',
+        'browser switch draft cleanup failed',
+      )
+    }
     await setLottery(admin, false)
     const ended = await api(`/api/admin/lottery/campaigns/${campaignID}/status`, {
       method: 'POST',

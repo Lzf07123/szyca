@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api/client'
+import ConfirmDialog from '../../components/ConfirmDialog'
 
 interface MediaRef {
   module: string
@@ -28,6 +29,7 @@ export default function MediaPanel({
   const [assets, setAssets] = useState<Asset[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const [pendingDelete, setPendingDelete] = useState<Asset | null>(null)
 
   const load = async () => {
     setLoading(true)
@@ -50,7 +52,6 @@ export default function MediaPanel({
 
   const remove = async (asset: Asset) => {
     if (asset.refs.length > 0) return
-    if (!window.confirm(`确定删除 ${asset.path}？文件将从数据卷移除。`)) return
     try {
       await api(`/api/admin/media/${asset.id}`, { method: 'DELETE' })
       await load()
@@ -105,7 +106,7 @@ export default function MediaPanel({
                   type="button"
                   disabled={asset.refs.length > 0}
                   title={asset.refs.length > 0 ? '先解除所有引用' : '删除文件'}
-                  onClick={() => void remove(asset)}
+                  onClick={() => setPendingDelete(asset)}
                 >
                   {asset.refs.length > 0 ? '使用中' : '删除'}
                 </button>
@@ -114,6 +115,24 @@ export default function MediaPanel({
           ))}
           {assets.length === 0 && <p className="muted">暂无媒体资源。</p>}
         </div>
+      )}
+      {pendingDelete && (
+        <ConfirmDialog
+          title={`删除 ${pendingDelete.path.split('/').pop() || pendingDelete.id}？`}
+          message="未引用的文件将从数据卷永久移除。"
+          details={[
+            '此操作不可恢复',
+            '若有其他模块或页面引用该文件，服务端会拒绝删除',
+          ]}
+          confirmLabel="确认删除"
+          tone="danger"
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => {
+            const asset = pendingDelete
+            setPendingDelete(null)
+            void remove(asset)
+          }}
+        />
       )}
     </div>
   )

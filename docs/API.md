@@ -141,16 +141,50 @@
 | 方法 | 路径 | 所属模块 | 约束 |
 |---|---|---|---|
 | GET | `/api/rank?top=99` | `screen` | 受 `screen` feature 控制 |
-| GET | `/ws` | `realtime` | `quiz` 或 `screen` 任一开启即可连接 |
+| GET | `/ws` | `realtime` | `quiz`、`screen` 或 `lottery` 任一开启即可连接 |
 
 `/api/rank` 只读取 Quiz 的排名服务，不写 Quiz 表。WebSocket 推送状态、排名、
-公告和特效事件。
+公告、特效和 `lottery_board` 号码大屏状态事件。
 
 ## 5. 抽奖
 
+### GET `/api/lottery/board`
+
+公开返回当前正在展示的号码开奖场次；无需用户 token：
+
+```json
+{
+  "enabled": true,
+  "event": {
+    "id": 1,
+    "name": "2026 招新现场抽奖",
+    "status": "live",
+    "range_start": "1",
+    "range_end": "999",
+    "number_width": 3,
+    "revision": 3,
+    "completed": false
+  },
+  "levels": [
+    {
+      "id": 10,
+      "name": "三等奖",
+      "winner_count": 20,
+      "sort": 10,
+      "state": "pending",
+      "winners": []
+    }
+  ]
+}
+```
+
+- 号码范围和中奖号码以十进制字符串返回，避免浏览器大整数精度丢失。
+- 无上线场次时 `event` 为 `null`；号码大屏模式关闭时 `enabled` 为 `false`。
+- 公开响应不包含操作员、请求 ID、其他后台配置。
+
 ### GET `/api/lottery/campaign`
 
-返回当前公开活动及用户状态：
+个人抽奖模式开启时，返回当前公开活动及用户状态：
 
 ```json
 {
@@ -170,7 +204,8 @@
 }
 ```
 
-公开响应不包含权重、未中奖权重、其他用户记录或后台配置。
+公开响应不包含权重、未中奖权重、其他用户记录或后台配置。个人模式关闭时返回
+`404 mode_disabled`。
 
 ### POST `/api/lottery/draw`
 
@@ -200,6 +235,7 @@
 | HTTP | code | 语义 |
 |---:|---|---|
 | 404 | `feature_disabled` | 全局抽奖开关关闭 |
+| 404 | `mode_disabled` | 个人抽奖子开关关闭 |
 | 409 | `campaign_not_active` | 未开始、暂停或结束 |
 | 403 | `not_eligible` | 未完成答题或未达标 |
 | 409 | `already_drawn` | 本周活动已抽取过 |
@@ -278,6 +314,16 @@
 
 | 方法 | 路径 | 权限 |
 |---|---|---|
+| GET | `/api/admin/lottery/modes` | `lottery.configure` |
+| PUT | `/api/admin/lottery/modes` | `lottery.configure` |
+| GET | `/api/admin/lottery/number-events` | `lottery.configure` |
+| POST | `/api/admin/lottery/number-events` | `lottery.configure` |
+| GET | `/api/admin/lottery/number-events/{id}` | `lottery.configure` |
+| DELETE | `/api/admin/lottery/number-events/{id}` | `lottery.configure` |
+| POST | `/api/admin/lottery/number-events/{id}/publish` | `lottery.configure` |
+| POST | `/api/admin/lottery/number-events/{id}/archive` | `lottery.configure` |
+| POST | `/api/admin/lottery/number-events/{id}/draw` | `lottery.configure` |
+| GET | `/api/admin/lottery/number-events/{id}/export` | `lottery.configure` |
 | GET | `/api/admin/lottery/campaigns` | `lottery.configure` |
 | POST | `/api/admin/lottery/campaigns` | `lottery.configure` |
 | POST | `/api/admin/lottery/campaigns/{id}/status` | `lottery.configure` |
@@ -286,6 +332,11 @@
 | GET | `/api/admin/lottery/draws` | `lottery.configure` |
 | GET | `/api/admin/lottery/export` | `lottery.configure` |
 | POST | `/api/admin/lottery/draws/{id}/claim` | `lottery.claim` |
+
+号码场次状态为 `draft / live / archived`，同一时间最多一个 `live` 场次。
+`draw` 请求体为 `{level_id, request_id}`，只能按顺序触发下一个待开等级；
+相同请求重放返回原结果且不会重复扣减号码。
+升级后的模式默认值为号码大屏开启、个人抽取关闭，模块总开关仍单独控制整个抽奖模块。
 
 ### 固定角色
 
