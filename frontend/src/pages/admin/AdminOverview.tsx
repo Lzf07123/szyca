@@ -68,6 +68,7 @@ export default function AdminOverview({
     online: 0,
   })
   const [audit, setAudit] = useState<AuditEntry[]>([])
+  const [detailsOpen, setDetailsOpen] = useState(false)
 
   useEffect(() => {
     const current = data.overview
@@ -84,11 +85,11 @@ export default function AdminOverview({
   }, [data.overview])
 
   useEffect(() => {
-    if (!canReadAudit) return
+    if (!canReadAudit || !detailsOpen) return
     void api<{ entries: AuditEntry[] }>('/api/admin/audit?limit=5')
       .then((result) => setAudit(result.entries))
       .catch(() => undefined)
-  }, [canReadAudit])
+  }, [canReadAudit, detailsOpen])
 
   const stats: Array<{ key: DeltaKey; label: string; code: string; value: number }> = [
     { key: 'users', label: '注册用户', code: 'USERS', value: data.overview.users },
@@ -136,13 +137,15 @@ export default function AdminOverview({
     }),
     '> _',
   ]
+  const primaryAction = quickActions.find((action) => action.tab === 'control') ?? quickActions[0]
+  const secondaryActions = quickActions.filter((action) => action !== primaryAction)
 
   return (
     <section className="admin-overview" aria-labelledby="overview-title" aria-busy={loading}>
       <div className="workbench-head">
         <div>
-          <p className="section-command"><span>$</span> systemctl status nebula_os</p>
-          <h2 id="overview-title">控制台概览 <span>WORKBENCH</span></h2>
+          <p className="section-eyebrow">ADMIN OVERVIEW</p>
+          <h2 id="overview-title">运营概览</h2>
         </div>
         <div className="workbench-actions">
           <span
@@ -168,41 +171,53 @@ export default function AdminOverview({
         </div>
       </div>
 
-      {quickActions.length > 0 && (
-        <section className="admin-quick-actions" aria-labelledby="quick-actions-title">
-          <div className="admin-quick-head">
-            <h3 id="quick-actions-title">现在该做什么</h3>
-            <span>按当前权限显示可执行入口</span>
+      <section className="overview-focus" aria-labelledby="quick-actions-title">
+        {primaryAction ? (
+          <>
+            <div className="overview-focus-copy">
+              <p className="section-label">下一项操作 / NEXT ACTION</p>
+              <h3 id="quick-actions-title">{primaryAction.label}</h3>
+              <p>{primaryAction.description}</p>
+              <span>{primaryAction.meta}</span>
+            </div>
+            <button
+              className="btn btn-primary overview-focus-action"
+              type="button"
+              onClick={() => onNavigate(primaryAction.tab)}
+            >
+              进入{primaryAction.label}
+              <span aria-hidden="true">→</span>
+            </button>
+            {secondaryActions.length > 0 && (
+              <div className="overview-secondary-actions" aria-label="其他可执行操作">
+                {secondaryActions.map((action) => (
+                  <button
+                    key={action.tab}
+                    type="button"
+                    onClick={() => onNavigate(action.tab)}
+                  >
+                    <span>{action.label}</span>
+                    <small>{action.meta}</small>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="overview-focus-copy">
+            <p className="section-label">访问权限 / ACCESS</p>
+            <h3 id="quick-actions-title">当前没有可执行操作</h3>
+            <p>当前角色只有查看权限，请从左侧导航进入可读页面。</p>
           </div>
-          <div className="admin-quick-grid">
-            {quickActions.map((action, index) => (
-              <button
-                key={action.tab}
-                className="admin-quick-action"
-                type="button"
-                onClick={() => onNavigate(action.tab)}
-              >
-                <span className="admin-quick-index" aria-hidden="true">
-                  {String(index + 1).padStart(2, '0')}
-                </span>
-                <strong>{action.label}</strong>
-                <small>{action.description}</small>
-                <span className="admin-quick-meta">
-                  {action.meta}
-                  <b aria-hidden="true">进入 →</b>
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
+        )}
+      </section>
 
       <div className="stat-grid">
         {stats.map((stat) => {
           const delta = deltas[stat.key]
           const direction = delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat'
           return (
-            <article className="stat-card" key={stat.key}>
+            <article className="stat-card overview-kpi" key={stat.key}>
               <div className="stat-meta">
                 <span>[{stat.code}]</span>
                 <span>{stat.label}</span>
@@ -218,111 +233,125 @@ export default function AdminOverview({
         })}
       </div>
 
-      <div className="chart-grid">
-        <article className="admin-chart-card bar-card">
-          <div className="chart-head">
-            <div>
-              <p className="section-label">LIVE METRICS / 02</p>
-              <h3>活动数据脉冲</h3>
-            </div>
-            <code>COUNT / REAL</code>
-          </div>
-          <div
-            className="activity-bars"
-            role="img"
-            aria-label={bars.map((item) => `${item.label} ${item.value}`).join('，')}
-          >
-            {bars.map((item, index) => (
-              <div className="bar-column" key={item.code}>
-                <b>{item.value}</b>
-                <div className="bar-track">
-                  <i
-                    style={{
-                      '--bar-size': `${Math.max(7, Math.round((item.value / maxBar) * 100))}%`,
-                      transitionDelay: `${index * 70}ms`,
-                    } as CSSProperties}
-                  />
+      <details
+        className="overview-details"
+        onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
+      >
+        <summary>
+          <span>
+            <b>详细运行数据</b>
+            <small>活动图表、系统状态与审计日志</small>
+          </span>
+          <span>按需展开</span>
+        </summary>
+        <div className="overview-details-body">
+          <div className="chart-grid">
+            <article className="admin-chart-card bar-card">
+              <div className="chart-head">
+                <div>
+                  <p className="section-label">LIVE METRICS / 02</p>
+                  <h3>活动数据脉冲</h3>
                 </div>
-                <span>{item.code}</span>
-                <small>{item.label}</small>
+                <code>COUNT / REAL</code>
               </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="admin-chart-card rate-card">
-          <div className="chart-head">
-            <div>
-              <p className="section-label">PARTICIPATION / 03</p>
-              <h3>参与转化</h3>
-            </div>
-            <code>RATIO</code>
-          </div>
-          <div className="rate-body">
-            <div
-              className="donut-chart"
-              style={{ '--rate': `${participation * 3.6}deg` } as CSSProperties}
-              role="img"
-              aria-label={`参与答题人数占注册用户的 ${participation}%`}
-            >
-              <div>
-                <strong>{participation}%</strong>
-                <span>PARTICIPATION</span>
-              </div>
-            </div>
-            <dl className="rate-legend">
-              <div><dt>已参与</dt><dd>{data.overview.participants}</dd></div>
-              <div><dt>总用户</dt><dd>{data.overview.users}</dd></div>
-              <div><dt>当前在线</dt><dd>{data.overview.online}</dd></div>
-            </dl>
-          </div>
-        </article>
-      </div>
-
-      <div className="overview-lower">
-        <article className="runtime-table-card">
-          <div className="chart-head">
-            <div>
-              <p className="section-label">SYSTEM MATRIX / 04</p>
-              <h3>运行状态</h3>
-            </div>
-            <code>HEALTH CHECK</code>
-          </div>
-          <div className="runtime-table-wrap">
-            <table className="runtime-table">
-              <thead>
-                <tr><th scope="col">模块</th><th scope="col">标识</th><th scope="col">当前值</th><th scope="col">状态</th></tr>
-              </thead>
-              <tbody>
-                {checks.map((check) => (
-                  <tr key={check.label}>
-                    <td><code>{check.label}</code></td>
-                    <td>{check.code}</td>
-                    <td>{check.value}</td>
-                    <td>
-                      <span className={`status-pill ${check.ok ? 'ok' : 'idle'}`}>
-                        <i aria-hidden="true" />
-                        {check.ok ? '正常' : '待机'}
-                      </span>
-                    </td>
-                  </tr>
+              <div
+                className="activity-bars"
+                role="img"
+                aria-label={bars.map((item) => `${item.label} ${item.value}`).join('，')}
+              >
+                {bars.map((item, index) => (
+                  <div className="bar-column" key={item.code}>
+                    <b>{item.value}</b>
+                    <div className="bar-track">
+                      <i
+                        style={{
+                          '--bar-size': `${Math.max(7, Math.round((item.value / maxBar) * 100))}%`,
+                          transitionDelay: `${index * 70}ms`,
+                        } as CSSProperties}
+                      />
+                    </div>
+                    <span>{item.code}</span>
+                    <small>{item.label}</small>
+                  </div>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </article>
+              </div>
+            </article>
 
-        <article className="terminal-log-card">
-          <div className="chart-head">
-            <div>
-              <p className="section-label">EVENT STREAM / 05</p>
-              <h3>终端日志</h3>
-            </div>
-            <code>TAIL -F</code>
+            <article className="admin-chart-card rate-card">
+              <div className="chart-head">
+                <div>
+                  <p className="section-label">PARTICIPATION / 03</p>
+                  <h3>参与转化</h3>
+                </div>
+                <code>RATIO</code>
+              </div>
+              <div className="rate-body">
+                <div
+                  className="donut-chart"
+                  style={{ '--rate': `${participation * 3.6}deg` } as CSSProperties}
+                  role="img"
+                  aria-label={`参与答题人数占注册用户的 ${participation}%`}
+                >
+                  <div>
+                    <strong>{participation}%</strong>
+                    <span>PARTICIPATION</span>
+                  </div>
+                </div>
+                <dl className="rate-legend">
+                  <div><dt>已参与</dt><dd>{data.overview.participants}</dd></div>
+                  <div><dt>总用户</dt><dd>{data.overview.users}</dd></div>
+                  <div><dt>当前在线</dt><dd>{data.overview.online}</dd></div>
+                </dl>
+              </div>
+            </article>
           </div>
-          <pre aria-label="系统终端日志"><code>{logLines.join('\n')}</code></pre>
-        </article>
-      </div>
+
+          <div className="overview-lower">
+            <article className="runtime-table-card">
+              <div className="chart-head">
+                <div>
+                  <p className="section-label">SYSTEM MATRIX / 04</p>
+                  <h3>运行状态</h3>
+                </div>
+                <code>HEALTH CHECK</code>
+              </div>
+              <div className="runtime-table-wrap">
+                <table className="runtime-table">
+                  <thead>
+                    <tr><th scope="col">模块</th><th scope="col">标识</th><th scope="col">当前值</th><th scope="col">状态</th></tr>
+                  </thead>
+                  <tbody>
+                    {checks.map((check) => (
+                      <tr key={check.label}>
+                        <td><code>{check.label}</code></td>
+                        <td>{check.code}</td>
+                        <td>{check.value}</td>
+                        <td>
+                          <span className={`status-pill ${check.ok ? 'ok' : 'idle'}`}>
+                            <i aria-hidden="true" />
+                            {check.ok ? '正常' : '待机'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </article>
+
+            <article className="terminal-log-card">
+              <div className="chart-head">
+                <div>
+                  <p className="section-label">EVENT STREAM / 05</p>
+                  <h3>终端日志</h3>
+                </div>
+                <code>TAIL -F</code>
+              </div>
+              <pre aria-label="系统终端日志"><code>{logLines.join('\n')}</code></pre>
+            </article>
+          </div>
+        </div>
+      </details>
     </section>
   )
 }

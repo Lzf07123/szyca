@@ -6,13 +6,19 @@
 
 > 架构见 [docs/架构与模块.md](docs/架构与模块.md)，接口见 [docs/API.md](docs/API.md)
 >
+> Section 插件开发契约见 [docs/Section插件开发.md](docs/Section插件开发.md)
+>
+> 功能模块开发契约见 [docs/功能模块开发.md](docs/功能模块开发.md)
+>
 > 后台操作见 [docs/后台操作手册.md](docs/后台操作手册.md)，部署/回滚见 [docs/部署与回滚.md](docs/部署与回滚.md)
 >
 > 实施基线与验收取证见 [docs/官网重构与抽奖任务书.md](docs/官网重构与抽奖任务书.md)
 
 ## 功能一览
 
-- **数据驱动官网**：单次 `/api/site` 获取品牌、导航、页脚、模块开关、Typed Section、背景和二维码；公开站共享 56px 网格、90 节点 Canvas 星座、终端语言和三卡核心模块
+- **数据驱动官网**：单次 `/api/site` 获取品牌、导航、页脚、模块开关、Section 插件实例、背景和二维码；同一类型可重复编排，公开站共享 56px 网格、90 节点 Canvas 星座、终端语言和模块卡片布局
+- **活动影像**：独立图集数据与专用上传/说明/排序/删除接口，文件接入媒体引用与删除保护，公开端随 `/api/site` 一次返回
+- **功能模块边界**：站壳只负责布局、首页、后台与模块组合；答题、加入、抽奖、排行榜通过前后端模块注册表接入，公开导航、路由、API 和懒加载页面由模块 Manifest 贡献
 - **在线答题**：一人一设备一身份；难度自选（全部/容易/简单/困难）；每轮题目顺序持久化；只能按当前题序每题提交一次；正确选项不下发前端；服务端按截止时间校验，网络抖动可配置宽限
 - **排行榜**：按最佳一轮总分优先、同分按用时排序；全量排名（未答题也排）、大屏最多显示 99 名、头部显示「我的排名」、参与/答题/在线连接统计
 - **身份规则**：设备指纹去重（同设备换昵称需先放弃）；放弃身份需二次确认并告知副作用；放弃后昵称永久封存、榜单留痕；可多轮答题取历史最佳成绩
@@ -96,10 +102,10 @@ scripts/publish_image.sh --push
 ## 后台使用速查
 
 1. 访问 `/admin`，输入 `ADMIN_USERNAME` 与 `ADMIN_PASSWORD` 创建的管理员账号
-2. **概览**：真实统计卡与增幅、柱状图、参与转化环形图、运行状态表和终端日志
+2. **概览**：单一“下一项操作”焦点、四项紧凑指标；图表、运行状态和终端日志默认折叠、按需展开
 3. **答题控制**：开始/结束答题、特效广播、公告广播、二维码管理、成绩导出
 4. **题库**：**批量导入**（下载模板，列：题目,选项A~F,正确答案(A-F),难度,分值；「示例」开头行自动跳过）、新增题目、启用/停用
-5. **站点内容**：模块总开关、Section 排序/启停、草稿/发布、定时上下线、标题/正文/CTA 配置
+5. **站点内容**：模块总开关、Section 新增/删除/排序/启停、草稿/发布、定时上下线、标题/正文/CTA 配置
 6. **抽奖**：总开关、活动开始/暂停/结束、资格、奖品权重与库存、结果查看、领取核销与导出
 7. **媒体与外观**：Logo、页脚、背景和媒体引用台账
 8. **管理员/审计**：创建角色账号、停用即时踢线、按管理员/资源/请求 ID 查询审计
@@ -127,6 +133,7 @@ scripts/publish_image.sh --push
 | POST | /api/admin/auth/login | 管理员登录，设置 HttpOnly/SameSite Cookie 并返回 CSRF token |
 | GET* | /api/admin/auth/me | 当前管理员、角色和权限；刷新 CSRF token |
 | GET* | /api/admin/overview | 系统概览 |
+| GET* | /api/admin/site/section-plugins | 首页 Section 插件 Manifest |
 | GET* | /api/admin/export/scores | 导出成绩 CSV |
 | POST* | /api/admin/questions/import | 批量导入题目 CSV |
 | GET* | /api/admin/questions/template | 下载导入模板 |
@@ -137,8 +144,8 @@ scripts/publish_image.sh --push
 ## 目录结构
 
 ```
-backend/              Go（site/access/audit/media/lottery/quiz/platform/store/ws）
-frontend/             React 18 + Vite（官网、答题、大屏、抽奖、RBAC 后台）
+backend/              Go（appmodule/site/access/audit/media/lottery/quiz/platform/store/ws）
+frontend/             React 18 + Vite（站壳、Section 插件、功能模块、RBAC 后台）
 deploy/               单容器 Dockerfile + Compose + Nginx/Supervisor
 design-system/szyca/  BRAND + MASTER + 页面规则 + 项目自有深空模板
 docs/                 架构、API、后台、部署回滚与验收证据

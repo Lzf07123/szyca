@@ -18,16 +18,17 @@ import BrandMark from './components/BrandMark'
 import Footer from './components/Footer'
 import CosmicBackdrop from './components/CosmicBackdrop'
 import { usePageMeta } from './components/PageMeta'
-import { useSite, type SiteFeature } from './api/site'
+import { useSite } from './api/site'
 import { useScrollReveal } from './hooks/useScrollReveal'
+import type { AppModuleManifest } from './modules/contract'
+import {
+  APP_MODULE_ROUTES,
+  isFullscreenPath,
+  type RegisteredModuleRoute,
+} from './modules/registry'
 
 const Home = lazy(() => import('./pages/Home'))
-const Join = lazy(() => import('./pages/Join'))
-const Quiz = lazy(() => import('./pages/Quiz'))
-const Result = lazy(() => import('./pages/Result'))
-const Screen = lazy(() => import('./pages/Screen'))
 const Admin = lazy(() => import('./pages/Admin'))
-const Lottery = lazy(() => import('./pages/Lottery'))
 
 function PageLoading() {
   return (
@@ -38,18 +39,15 @@ function PageLoading() {
   )
 }
 
-function FeatureUnavailable({ feature }: { feature: SiteFeature['key'] }) {
-  const labels: Record<SiteFeature['key'], string> = {
-    quiz: '答题',
-    lottery: '抽奖',
-    join: '加入我们',
-    screen: '排行榜',
-  }
-  usePageMeta(`${labels[feature]}暂未开放 · 计算机协会`, `${labels[feature]}模块当前未向访客开放。`)
+function FeatureUnavailable({ module }: { module: AppModuleManifest }) {
+  usePageMeta(
+    `${module.label}暂未开放 · 计算机协会`,
+    `${module.label}模块当前未向访客开放。`,
+  )
   return (
     <section className="state-page">
       <p className="eyebrow">暂未开放</p>
-      <h1>{labels[feature]}模块尚未启用</h1>
+      <h1>{module.label}模块尚未启用</h1>
       <p>该功能当前未向访客开放，返回首页查看正在进行的活动。</p>
       <Link className="btn btn-primary" to="/">返回首页</Link>
     </section>
@@ -57,14 +55,15 @@ function FeatureUnavailable({ feature }: { feature: SiteFeature['key'] }) {
 }
 
 function FeatureGate({
-  feature,
+  module,
   children,
 }: {
-  feature: SiteFeature['key']
+  module: AppModuleManifest
   children: ReactNode
 }) {
   const { featureEnabled } = useSite()
-  return featureEnabled(feature) ? <>{children}</> : <FeatureUnavailable feature={feature} />
+  if (!module.feature || featureEnabled(module.feature)) return <>{children}</>
+  return <FeatureUnavailable module={module} />
 }
 
 function Layout() {
@@ -74,7 +73,7 @@ function Layout() {
   const [headerScrolled, setHeaderScrolled] = useState(() => window.scrollY > 8)
   const mainRef = useRef<HTMLElement>(null)
   const navToggleRef = useRef<HTMLButtonElement>(null)
-  const fullscreen = pathname === '/screen'
+  const fullscreen = isFullscreenPath(pathname)
   const isHome = pathname === '/'
   const isAdmin = pathname === '/admin'
   useScrollReveal(pathname)
@@ -215,6 +214,12 @@ function RouteError() {
   )
 }
 
+function ModuleRoute({ module, route }: RegisteredModuleRoute) {
+  const Component = route.Component
+  const content = <Component />
+  return route.feature ? <FeatureGate module={module}>{content}</FeatureGate> : content
+}
+
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -222,23 +227,10 @@ export const router = createBrowserRouter([
     errorElement: <RouteError />,
     children: [
       { index: true, element: <Home /> },
-      {
-        path: 'join',
-        element: <FeatureGate feature="join"><Join /></FeatureGate>,
-      },
-      {
-        path: 'quiz',
-        element: <FeatureGate feature="quiz"><Quiz /></FeatureGate>,
-      },
-      { path: 'result', element: <Result /> },
-      {
-        path: 'screen',
-        element: <FeatureGate feature="screen"><Screen /></FeatureGate>,
-      },
-      {
-        path: 'lottery',
-        element: <FeatureGate feature="lottery"><Lottery /></FeatureGate>,
-      },
+      ...APP_MODULE_ROUTES.map(({ module, route }) => ({
+        path: route.path.replace(/^\//, ''),
+        element: <ModuleRoute module={module} route={route} />,
+      })),
       { path: 'admin', element: <Admin /> },
       { path: '*', element: <NotFound /> },
     ],

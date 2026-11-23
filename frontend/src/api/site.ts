@@ -40,7 +40,7 @@ export interface FooterSettings {
 }
 
 export interface SiteFeature {
-  key: 'quiz' | 'lottery' | 'join' | 'screen'
+  key: string
   enabled: boolean
   config: Record<string, unknown>
 }
@@ -49,6 +49,7 @@ export interface SectionItem {
   title?: string
   body?: string
   image_url?: string
+  [key: string]: unknown
 }
 
 export interface SectionConfig {
@@ -63,14 +64,57 @@ export interface SectionConfig {
   action_label?: string
   action_to?: string
   items?: SectionItem[]
+  [key: string]: unknown
+}
+
+export type SectionPluginFieldType = 'text' | 'textarea' | 'path' | 'items'
+
+export interface SectionPluginField {
+  key: string
+  label: string
+  type: SectionPluginFieldType
+  group?: string
+  group_label?: string
+  group_description?: string
+  description?: string
+  placeholder?: string
+  max_length?: number
+  max_items?: number
+  item_fields?: SectionPluginField[]
+}
+
+export interface SectionPluginManifest {
+  key: string
+  version: number
+  scope: 'home'
+  label: string
+  description: string
+  feature?: SiteFeature['key']
+  repeatable: boolean
+  max_instances: number
+  summary_field?: string
+  default_config: SectionConfig
+  fields: SectionPluginField[]
+}
+
+export interface SiteGalleryImage {
+  id: number
+  section_id: number
+  title: string
+  image_url: string
+  sort: number
+  created_at: string
+  updated_at: string
 }
 
 export interface HomeSection {
   id: number
-  kind: 'hero' | 'about' | 'activities' | 'quiz' | 'lottery' | 'join' | 'gallery'
+  kind: string
+  plugin_version: number
   enabled: boolean
   sort: number
   config: SectionConfig
+  gallery?: SiteGalleryImage[]
   status: string
 }
 
@@ -100,7 +144,7 @@ interface SiteContextValue {
   loading: boolean
   error: string
   reload: () => Promise<void>
-  featureEnabled: (key: SiteFeature['key']) => boolean
+  featureEnabled: (key: string) => boolean
 }
 
 const SiteContext = createContext<SiteContextValue | null>(null)

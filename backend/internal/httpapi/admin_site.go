@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"szyca/internal/access"
 	"szyca/internal/site"
@@ -39,20 +40,44 @@ func (s *Server) handleAdminSections(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"sections": sections})
 }
 
+func (s *Server) handleAdminSectionPlugins(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"plugins": s.site.SectionPlugins()})
+}
+
 func (s *Server) handleAdminSaveSections(w http.ResponseWriter, r *http.Request) {
 	var request struct {
-		Sections []site.SectionUpdate `json:"sections"`
+		Sections   []site.SectionUpdate `json:"sections"`
+		DeletedIDs []int64              `json:"deleted_ids"`
 	}
 	if err := readJSON(r, &request); err != nil {
 		writeErr(w, http.StatusBadRequest, "请求体格式错误")
 		return
 	}
 	principal := principalFromRequest(r)
-	if err := s.site.UpdateSections(r.Context(), principal.ID, request.Sections); err != nil {
+	deletedGalleryImages, err := s.site.GalleryImagesForSections(
+		r.Context(), request.DeletedIDs,
+	)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	sections, err := s.site.UpdateSections(
+		r.Context(), principal.ID, request.Sections, request.DeletedIDs,
+	)
+	if err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"ok": "true"})
+	for _, image := range deletedGalleryImages {
+		s.releaseAndCleanup(
+			r,
+			image.ImageURL,
+			"gallery",
+			"image",
+			strconv.FormatInt(image.ID, 10),
+		)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": "true", "sections": sections})
 }
 
 func (s *Server) handleAdminFeatures(w http.ResponseWriter, r *http.Request) {

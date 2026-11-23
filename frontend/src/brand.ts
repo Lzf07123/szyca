@@ -6,6 +6,7 @@ const fallbackSections: HomeSection[] = [
   {
     id: 1,
     kind: 'hero',
+    plugin_version: 1,
     enabled: true,
     sort: 10,
     status: 'published',
@@ -22,6 +23,7 @@ const fallbackSections: HomeSection[] = [
   {
     id: 2,
     kind: 'about',
+    plugin_version: 1,
     enabled: true,
     sort: 20,
     status: 'published',
@@ -34,6 +36,7 @@ const fallbackSections: HomeSection[] = [
   {
     id: 3,
     kind: 'activities',
+    plugin_version: 1,
     enabled: true,
     sort: 30,
     status: 'published',
@@ -50,6 +53,7 @@ const fallbackSections: HomeSection[] = [
   {
     id: 4,
     kind: 'quiz',
+    plugin_version: 1,
     enabled: true,
     sort: 40,
     status: 'published',
@@ -64,6 +68,7 @@ const fallbackSections: HomeSection[] = [
   {
     id: 5,
     kind: 'join',
+    plugin_version: 1,
     enabled: true,
     sort: 60,
     status: 'published',

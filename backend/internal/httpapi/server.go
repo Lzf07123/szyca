@@ -68,103 +68,10 @@ func New(
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-	})
-	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-		defer cancel()
-		if err := s.svc.Ready(ctx); err != nil {
-			writeErr(w, http.StatusServiceUnavailable, err.Error())
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
-	})
-
-	// 公开
-	mux.HandleFunc("GET /api/site", s.handleSite)
-	mux.HandleFunc("GET /api/runtime", s.handlePublicRuntime)
-	mux.HandleFunc("GET /api/backgrounds", s.handleBackgrounds)
-	mux.HandleFunc("GET /api/stats", s.withFeature(site.FeatureQuiz, s.handleStats))
-	mux.HandleFunc("POST /api/identity/abandon", s.withFeature(site.FeatureQuiz, s.handleAbandonIdentity))
-	mux.HandleFunc("GET /api/identity/current", s.withFeature(site.FeatureQuiz, s.handleCurrentIdentity))
-	mux.HandleFunc("GET /api/identity/status", s.withFeature(site.FeatureQuiz, s.handleIdentityStatus))
-	mux.HandleFunc("POST /api/session", s.withFeature(site.FeatureQuiz, s.handleSession))
-	mux.HandleFunc("GET /api/rank", s.withFeature(site.FeatureQuiz, s.handleRank))
-	mux.HandleFunc("GET /api/qrcode", s.withFeature(site.FeatureJoin, s.handleQrcode))
-	mux.HandleFunc("GET /api/config", s.handleConfig)
-	mux.HandleFunc("GET /api/content/pages/{slug}", s.handleSitePage)
-
-	// 需 token
-	mux.HandleFunc("POST /api/quiz/round", s.withFeature(site.FeatureQuiz, s.withUser(s.handleStartRound)))
-	mux.HandleFunc("POST /api/quiz/round/abandon", s.withFeature(site.FeatureQuiz, s.withUser(s.handleAbandonRound)))
-	mux.HandleFunc("GET /api/quiz/current", s.withFeature(site.FeatureQuiz, s.withUser(s.handleCurrentRound)))
-	mux.HandleFunc("POST /api/answer", s.withFeature(site.FeatureQuiz, s.withUser(s.handleAnswer)))
-	mux.HandleFunc("GET /api/me", s.withFeature(site.FeatureQuiz, s.withUser(s.handleMe)))
-	mux.HandleFunc("GET /api/lottery/campaign", s.withFeature(site.FeatureLottery, s.handleLotteryCampaign))
-	mux.HandleFunc("POST /api/lottery/draw", s.withFeature(site.FeatureLottery, s.withUser(s.handleLotteryDraw)))
-	mux.HandleFunc("GET /api/lottery/me", s.withFeature(site.FeatureLottery, s.withUser(s.handleLotteryMe)))
-
-	// WebSocket（可匿名=大屏）
-	mux.HandleFunc("GET /ws", s.withAnyFeature(
-		[]string{site.FeatureQuiz, site.FeatureScreen},
-		ws.Serve(s.hub, s.validateToken, s.cfg.WSAllowedOrigins),
-	))
-
-	// 后台：账号会话 + 固定角色权限；旧 X-Admin-Token 仅作迁移期 owner 兼容。
-	mux.HandleFunc("POST /api/admin/auth/login", s.handleAdminLogin)
-	mux.HandleFunc("GET /api/admin/auth/status", s.handleAdminAuthStatus)
-	mux.HandleFunc("GET /api/admin/auth/me", s.withAuthenticated(s.handleAdminMe))
-	mux.HandleFunc("POST /api/admin/auth/logout", s.withAuthenticated(s.handleAdminLogout))
-	mux.HandleFunc("GET /api/admin/accounts", s.withPermission("access.manage", s.handleAdminListAccounts))
-	mux.HandleFunc("POST /api/admin/accounts", s.withPermission("access.manage", s.handleAdminCreateAccount))
-	mux.HandleFunc("POST /api/admin/accounts/{id}/disabled", s.withPermission("access.manage", s.handleAdminDisableAccount))
-	mux.HandleFunc("GET /api/admin/audit", s.withPermission("audit.read", s.handleAdminAudit))
-
-	mux.HandleFunc("GET /api/admin/site", s.withPermission("site.read", s.handleAdminSite))
-	mux.HandleFunc("GET /api/admin/site/sections", s.withPermission("site.read", s.handleAdminSections))
-	mux.HandleFunc("PUT /api/admin/site/sections", s.withPermission("site.write", s.handleAdminSaveSections))
-	mux.HandleFunc("GET /api/admin/platform/features", s.withPermission("site.read", s.handleAdminFeatures))
-	mux.HandleFunc("PUT /api/admin/platform/features", s.withAuthenticated(s.handleAdminSaveFeatures))
-	mux.HandleFunc("GET /api/admin/media", s.withPermission("media.read", s.handleAdminMedia))
-	mux.HandleFunc("DELETE /api/admin/media/{id}", s.withPermission("media.write", s.handleAdminDeleteMedia))
-
-	mux.HandleFunc("POST /api/admin/quiz-state", s.withPermission("quiz.operate", s.handleAdminState))
-	mux.HandleFunc("GET /api/admin/overview", s.withPermission("site.read", s.handleAdminOverview))
-	mux.HandleFunc("GET /api/admin/export/scores", s.withPermission("scores.read", s.handleAdminExportScores))
-	mux.HandleFunc("POST /api/admin/questions/import", s.withPermission("quiz.write", s.handleAdminImportQuestions))
-	mux.HandleFunc("GET /api/admin/questions/template", s.withPermission("quiz.read", s.handleAdminQuestionsTemplate))
-	mux.HandleFunc("POST /api/admin/announce", s.withPermission("quiz.operate", s.handleAdminAnnounce))
-	mux.HandleFunc("POST /api/admin/effect", s.withPermission("quiz.operate", s.handleAdminEffect))
-	mux.HandleFunc("GET /api/admin/qrcodes", s.withPermission("site.read", s.handleAdminListQrcodes))
-	mux.HandleFunc("POST /api/admin/qrcodes", s.withPermission("site.write", s.handleAdminAddQrcode))
-	mux.HandleFunc("POST /api/admin/qrcodes/{id}", s.withPermission("site.write", s.handleAdminUpdateQrcode))
-	mux.HandleFunc("DELETE /api/admin/qrcodes/{id}", s.withPermission("site.write", s.handleAdminDeleteQrcode))
-	mux.HandleFunc("GET /api/admin/questions", s.withPermission("quiz.read", s.handleAdminListQuestions))
-	mux.HandleFunc("POST /api/admin/questions", s.withPermission("quiz.write", s.handleAdminCreateQuestion))
-	mux.HandleFunc("DELETE /api/admin/questions", s.withPermission("quiz.write", s.handleAdminClearQuestions))
-	mux.HandleFunc("POST /api/admin/questions/{id}/active", s.withPermission("quiz.write", s.handleAdminSetActive))
-	mux.HandleFunc("POST /api/admin/backgrounds", s.withPermission("media.write", s.handleAdminUploadBackground))
-	mux.HandleFunc("GET /api/admin/backgrounds", s.withPermission("media.read", s.handleAdminListBackgrounds))
-	mux.HandleFunc("POST /api/admin/backgrounds/{id}/active", s.withPermission("media.write", s.handleAdminSetBgActive))
-	mux.HandleFunc("DELETE /api/admin/backgrounds/{id}", s.withPermission("media.write", s.handleAdminDeleteBackground))
-	mux.HandleFunc("DELETE /api/admin/backgrounds", s.withPermission("media.write", s.handleAdminClearBackgrounds))
-	mux.HandleFunc("POST /api/admin/uploads", s.withPermission("media.write", s.handleAdminUpload))
-	mux.HandleFunc("GET /api/admin/footer", s.withPermission("site.read", s.handleAdminGetFooter))
-	mux.HandleFunc("POST /api/admin/footer", s.withPermission("site.write", s.handleAdminSaveFooter))
-	mux.HandleFunc("GET /api/admin/logo", s.withPermission("site.read", s.handleAdminGetLogo))
-	mux.HandleFunc("POST /api/admin/logo", s.withPermission("site.write", s.handleAdminSaveLogo))
-	mux.HandleFunc("GET /api/admin/lottery/campaigns", s.withPermission("lottery.configure", s.handleAdminLotteryCampaigns))
-	mux.HandleFunc("POST /api/admin/lottery/campaigns", s.withPermission("lottery.configure", s.handleAdminSaveLotteryCampaign))
-	mux.HandleFunc("POST /api/admin/lottery/campaigns/{id}/status", s.withPermission("lottery.configure", s.handleAdminLotteryStatus))
-	mux.HandleFunc("POST /api/admin/lottery/campaigns/{id}/prizes", s.withPermission("lottery.configure", s.handleAdminSaveLotteryPrize))
-	mux.HandleFunc("DELETE /api/admin/lottery/campaigns/{id}/prizes/{prizeId}", s.withPermission("lottery.configure", s.handleAdminDeleteLotteryPrize))
-	mux.HandleFunc("GET /api/admin/lottery/draws", s.withPermission("lottery.configure", s.handleAdminLotteryDraws))
-	mux.HandleFunc("POST /api/admin/lottery/draws/{id}/claim", s.withPermission("lottery.claim", s.handleAdminLotteryClaim))
-	mux.HandleFunc("GET /api/admin/lottery/export", s.withPermission("lottery.configure", s.handleAdminLotteryExport))
-
-	// 上传文件静态服务（生产由 nginx 直出共享卷，此处兜底开发模式）
-	mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(s.cfg.UploadDir))))
+	s.registerCoreRoutes(mux)
+	for _, module := range apiRouteModules() {
+		module.register(s, mux)
+	}
 
 	return s.withCORS(mux)
 }

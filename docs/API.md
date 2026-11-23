@@ -1,6 +1,6 @@
 # szyca API
 
-> 版本：2.0  
+> 版本：2.2
 > 更新：2026-11-23  
 > 所有 API 使用同源 Cookie 或 Bearer token；未声明为后台的接口不要求管理员会话。
 
@@ -74,7 +74,9 @@
 ```
 
 - `features` 只允许 `quiz / lottery / join / screen`。
-- `sections.kind` 只允许 `hero / about / activities / quiz / lottery / join / gallery`。
+- `sections.kind` 必须是后端已注册的 Section 插件 key；内置插件为 `hero / about / activities / quiz / lottery / join / gallery`。
+- `sections.plugin_version` 表示插件契约版本；同一 `kind` 可以有多个独立实例，以 `id` 区分。
+- `gallery` Section 额外返回 `gallery` 数组，条目包含 `id / section_id / title / image_url / sort / created_at / updated_at`。
 - 关闭功能时导航和对应 Section 同步移除。
 - 响应带 ETag；`If-None-Match` 命中时返回 304。
 - `Cache-Control: public, max-age=0, must-revalidate`，保证配置尽快生效。
@@ -192,11 +194,48 @@
 |---|---|---|
 | GET | `/api/admin/site` | `site.read` |
 | GET | `/api/admin/site/sections` | `site.read` |
+| GET | `/api/admin/site/section-plugins` | `site.read` |
 | PUT | `/api/admin/site/sections` | `site.write` |
+| GET | `/api/admin/gallery/{sectionID}/images` | `site.read` |
+| POST | `/api/admin/gallery/{sectionID}/images` | `site.write`，multipart：`file`、可选 `title` |
+| POST | `/api/admin/gallery/{sectionID}/images/{imageID}` | `site.write`，修改图片说明 |
+| DELETE | `/api/admin/gallery/{sectionID}/images/{imageID}` | `site.write` |
+| PUT | `/api/admin/gallery/{sectionID}/images/order` | `site.write`，body：`{"ids":[...]}` |
 | GET | `/api/admin/platform/features` | `site.read` |
 | PUT | `/api/admin/platform/features` | 按模块检查 `site.write` / `lottery.configure` |
 | GET | `/api/admin/media` | `media.read` |
 | DELETE | `/api/admin/media/{id}` | `media.write`，存在引用时返回 409 |
+
+首页 Section 使用一次事务保存新增、修改和删除：
+
+```json
+{
+  "sections": [
+    {
+      "id": 0,
+      "kind": "gallery",
+      "plugin_version": 1,
+      "enabled": true,
+      "sort": 80,
+      "starts_at": null,
+      "ends_at": null,
+      "config": {},
+      "status": "draft"
+    }
+  ],
+  "deleted_ids": [7]
+}
+```
+
+- `id: 0` 表示新增，正整数表示更新；保存成功后响应返回最新 `sections`（含真实 ID）。
+- `kind` 是插件 key，`plugin_version` 省略时使用后端当前注册版本。
+- `deleted_ids` 列出本次要删除的既有区块 ID，可省略。
+- 同一 `kind` 可以有多个实例；是否允许重复及最大数量由插件 Manifest 的 `repeatable / max_instances` 决定，内置插件均允许重复且数量不限。
+- 校验、删除、新增和更新处于同一数据库事务，任一失败均不落地。
+
+`GET /api/admin/site/section-plugins` 返回 `{"plugins":[...]}`。Manifest 包含 `key / version / scope / label / description / feature / repeatable / max_instances / summary_field / default_config / fields`，后台根据 `fields` 生成通用配置表单。插件开发契约见 [Section插件开发.md](Section插件开发.md)。
+
+活动影像使用独立 `gallery_images` 数据，不再把图片数组写进 Section `config`。每个 gallery Section 最多 4 张图片；上传文件只支持 JPG/PNG/WebP/GIF，单张不超过 10MB。本地文件自动登记 `media` 引用；删除图片或删除整个 gallery Section 时，只有在没有其他资源引用后才清理磁盘文件。
 
 ### 抽奖运营
 

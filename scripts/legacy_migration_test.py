@@ -120,6 +120,7 @@ def snapshot() -> dict[str, int]:
           'qrcodes', (SELECT count(*) FROM qrcodes),
           'backgrounds', (SELECT count(*) FROM backgrounds),
           'section_count', (SELECT count(*) FROM home_sections),
+          'gallery_images', (SELECT count(*) FROM gallery_images),
           'admin_count', (SELECT count(*) FROM admin_accounts)
         )
     """).stdout.strip()
@@ -232,13 +233,30 @@ def main() -> None:
         assert first["qrcodes"] == before["qrcodes"] == 1, (before, first)
         assert first["backgrounds"] == before["backgrounds"] == 1, (before, first)
         assert first["section_count"] == 7
+        assert first["gallery_images"] == 0
         assert first["admin_count"] >= 1
         versions = psql("SELECT version FROM schema_migrations ORDER BY version").stdout.splitlines()
         assert versions == [
             "0001_quiz_baseline.sql",
             "0002_site_access_media.sql",
             "0003_lottery.sql",
+            "0004_section_plugins.sql",
+            "0005_gallery.sql",
         ], versions
+        assert psql(
+            "SELECT count(*) FROM information_schema.columns "
+            "WHERE table_name = 'home_sections' AND column_name = 'plugin_version'"
+        ).stdout.strip() == "1"
+        assert psql(
+            "SELECT count(*) FROM pg_constraint "
+            "WHERE conname = 'home_sections_kind_check'"
+        ).stdout.strip() == "0"
+        assert psql(
+            "SELECT to_regclass('public.gallery_images') IS NOT NULL"
+        ).stdout.strip() == "t"
+        assert psql(
+            "SELECT plugin_version FROM home_sections WHERE kind = 'gallery' LIMIT 1"
+        ).stdout.strip() == "2"
 
         config = run(["docker", "exec", APP, "wget", "-qO-", "http://127.0.0.1:8095/api/config"])
         site = run(["docker", "exec", APP, "wget", "-qO-", "http://127.0.0.1:8095/api/site"])
@@ -257,7 +275,7 @@ def main() -> None:
         assert versions_after == versions
 
         print(
-            "legacy migration ok: pre-seeded data preserved, 3 migrations recorded once, "
+            "legacy migration ok: pre-seeded data preserved, 5 migrations recorded once, "
             "failed transaction rolled back, restart idempotent"
         )
     finally:

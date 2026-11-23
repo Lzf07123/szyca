@@ -67,7 +67,8 @@ def data_counts() -> dict[str, int]:
           'attempts', (SELECT count(*) FROM attempts),
           'qrcodes', (SELECT count(*) FROM qrcodes),
           'backgrounds', (SELECT count(*) FROM backgrounds),
-          'sections', (SELECT count(*) FROM home_sections)
+          'sections', (SELECT count(*) FROM home_sections),
+          'gallery_images', (SELECT count(*) FROM gallery_images)
         )
         """
     )
@@ -81,7 +82,19 @@ def main() -> None:
         "0001_quiz_baseline.sql",
         "0002_site_access_media.sql",
         "0003_lottery.sql",
+        "0004_section_plugins.sql",
+        "0005_gallery.sql",
     ], versions
+    assert psql(
+        "SELECT count(*) FROM information_schema.columns "
+        "WHERE table_name = 'home_sections' AND column_name = 'plugin_version'"
+    ) == "1"
+    assert psql(
+        "SELECT count(*) FROM pg_constraint WHERE conname = 'home_sections_kind_check'"
+    ) == "0"
+    assert psql(
+        "SELECT plugin_version FROM home_sections WHERE kind = 'gallery' LIMIT 1"
+    ) == "2"
 
     before = data_counts()
     container_id = subprocess.run(
@@ -100,7 +113,7 @@ def main() -> None:
     versions_after = psql("SELECT version FROM schema_migrations ORDER BY version").splitlines()
     assert versions_after == versions, "migrations were applied twice"
     print(
-        "migration ok: three versions applied once; restart retained "
+        "migration ok: five versions applied once; restart retained "
         + json.dumps(after, ensure_ascii=False, sort_keys=True)
     )
 

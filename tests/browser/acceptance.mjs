@@ -66,6 +66,7 @@ async function setLotterySection(admin, enabled) {
   const sections = current.payload.sections.map((section) => ({
     id: section.id,
     kind: section.kind,
+    plugin_version: section.plugin_version || 1,
     enabled: section.kind === 'lottery' ? enabled : section.enabled,
     sort: section.sort,
     starts_at: section.starts_at || null,
@@ -658,7 +659,8 @@ async function main() {
     await assertNoOverflow(adminPage, 'admin-overview')
     await adminPage.screenshot({ path: `${ARTIFACTS}/screenshots/admin-overview-390.jpg`, fullPage: true, type: 'jpeg', quality: 82 })
     await axeCheck(adminPage, 'admin-overview')
-    await adminPage.getByRole('button', { name: '抽奖' }).click()
+    await adminPage.getByRole('button', { name: /当前功能/ }).click()
+    await adminPage.getByRole('button', { name: '抽奖', exact: true }).click()
     await adminPage.getByText('抽奖总开关').waitFor({ state: 'visible' })
     await assertNoOverflow(adminPage, 'admin-lottery')
     await assertReadableText(adminPage, 'admin-lottery')

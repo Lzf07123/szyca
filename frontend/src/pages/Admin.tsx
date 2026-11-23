@@ -148,7 +148,7 @@ export default function Admin() {
     setNavOpen(false)
     setMsg((current) => current.startsWith('✔') ? '' : current)
     window.requestAnimationFrame(() => {
-      adminContentRef.current?.scrollIntoView({ block: 'start', behavior: 'auto' })
+      window.scrollTo({ top: 0, behavior: 'auto' })
       adminContentRef.current?.focus({ preventScroll: true })
     })
     setSearchParams((current) => {
@@ -222,7 +222,7 @@ export default function Admin() {
     setNavOpen(false)
     setMsg((current) => current.startsWith('✔') ? '' : current)
     window.requestAnimationFrame(() => {
-      adminContentRef.current?.scrollIntoView({ block: 'start', behavior: 'auto' })
+      window.scrollTo({ top: 0, behavior: 'auto' })
       adminContentRef.current?.focus({ preventScroll: true })
     })
   }, [searchParams, tab])
