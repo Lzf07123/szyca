@@ -3569,6 +3569,20 @@ input[type="file"]::file-selector-button {
   gap: 8px 12px;
 }
 
+.about-page-form {
+  align-items: start;
+  gap: 16px 14px;
+}
+
+.about-page-form > .field {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.about-page-form > .form-grid-full {
+  grid-column: 1 / -1;
+}
+
 .section-composer .panel-head h2 {
   font-size: clamp(28px, 3.4vw, 38px);
   font-weight: 400;

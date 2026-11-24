@@ -667,7 +667,7 @@ export default function SiteEditor({
         </div>
         {page ? (
           <>
-            <div className="form-grid">
+            <div className="form-grid about-page-form">
               <label className="field">
                 页面标题
                 <input
@@ -692,28 +692,28 @@ export default function SiteEditor({
                   <option value="archived">已归档</option>
                 </select>
               </label>
+              <label className="field form-grid-full">
+                页面摘要
+                <input
+                  value={page.summary}
+                  maxLength={300}
+                  disabled={!canWrite}
+                  placeholder="显示在标题下方，也用于页面描述"
+                  onChange={(event) => setPage({ ...page, summary: event.target.value })}
+                />
+              </label>
+              <label className="field form-grid-full">
+                页面正文
+                <textarea
+                  rows={10}
+                  value={page.body}
+                  maxLength={20000}
+                  disabled={!canWrite}
+                  placeholder="每行显示为一段正文"
+                  onChange={(event) => setPage({ ...page, body: event.target.value })}
+                />
+              </label>
             </div>
-            <label className="field">
-              页面摘要
-              <input
-                value={page.summary}
-                maxLength={300}
-                disabled={!canWrite}
-                placeholder="显示在标题下方，也用于页面描述"
-                onChange={(event) => setPage({ ...page, summary: event.target.value })}
-              />
-            </label>
-            <label className="field">
-              页面正文
-              <textarea
-                rows={10}
-                value={page.body}
-                maxLength={20000}
-                disabled={!canWrite}
-                placeholder="每行显示为一段正文"
-                onChange={(event) => setPage({ ...page, body: event.target.value })}
-              />
-            </label>
           </>
         ) : (
           <div className="read-only-note" role="alert">
