@@ -1,0 +1,11 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Design template integrity digests are SHA-256 content hashes, not credentials."
+paths = ['''^design-system/szyca/template/manifest\.json$''']
+
+[[allowlists]]
+description = "RFC 6455 example WebSocket handshake nonce is public protocol test data."
+regexTarget = "line"
+regexes = ['''Sec-WebSocket-Key:\s*dGhlIHNhbXBsZSBub25jZQ==''']

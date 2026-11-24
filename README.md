@@ -1,7 +1,7 @@
 # szyca
 
 汕头职业技术学院计算机协会官网与招新答题系统：以「数字深空 · 代码即美学」为统一视觉语言，提供数据驱动首页、90 节点引力粒子背景、现场高并发答题、实时计分、全量排行榜、大屏、加入我们、精细后台与集成抽奖。
-技术栈：Go 1.22 + gorilla/websocket + Redis + PostgreSQL + React 18 (Vite) + Nginx。
+技术栈：Go 1.27 + gorilla/websocket + Redis + PostgreSQL + React 18 (Vite 8) + Nginx。
 生产环境合并为**单镜像、单容器、单数据卷**；低配机器只拉取预构建镜像，不需要本地编译。
 
 > 架构见 [docs/架构与模块.md](docs/架构与模块.md)，接口见 [docs/API.md](docs/API.md)
@@ -68,6 +68,8 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.build.yml u
 | `ADMIN_SESSION_HOURS` | 8 | 后台会话时长 |
 | `LEGACY_ADMIN_TOKEN_ENABLED` | false | 旧单口令迁移窗口开关，完成切换后保持关闭 |
 | `POSTGRES_PASSWORD` | szyca | 单容器内 PostgreSQL 口令（生产务必修改） |
+
+`ADMIN_COOKIE_SECURE=true` 即启用生产保护：默认管理员口令、默认数据库口令或旧口令开关未关闭时，容器会拒绝启动。
 | `QUESTION_SECONDS` | 20 | 每题倒计时（秒） |
 | `ANSWER_GRACE_SECONDS` | 20 | 网络抖动/断线补交宽限（秒）；截止时间本身仍以服务端记录为准 |
 | `QUESTION_COUNT` | 10 | 每轮抽题数 |
@@ -226,7 +228,7 @@ python3 scripts/site_perf_test.py
 覆盖题目脱敏、题序、幂等、服务端超时、排行榜/导出、并发注册、WS Origin、管理员登录限流、RBAC、CSRF、审计、站点 ETag/模块开关、媒体引用、抽奖资格、同用户并发、库存和领取，以及号码场次状态机、逐级开奖、并发重放和号码唯一性。后端单测：
 
 ```bash
-docker run --rm -v "$PWD:/src" -w /src golang:1.22-alpine go test ./...
+docker run --rm -v "$PWD:/src" -w /src golang:1.27-alpine go test ./...
 ```
 
 浏览器、无障碍、弱网降级与六档视口：
@@ -279,9 +281,9 @@ TEST_IMAGE=szyca:release-test python3 scripts/secure_cookie_test.py
 模块清单变更后重新生成注册表并检查漂移：
 
 ```bash
-docker run --rm -v "$PWD:/src" -w /src golang:1.22-alpine \
+docker run --rm -v "$PWD:/src" -w /src golang:1.27-alpine \
   go run ./cmd/modulegen --write
-docker run --rm -v "$PWD:/src" -w /src golang:1.22-alpine sh -c \
+docker run --rm -v "$PWD:/src" -w /src golang:1.27-alpine sh -c \
   'go run ./cmd/modulegen --check'
 ```
 

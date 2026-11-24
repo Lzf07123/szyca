@@ -247,6 +247,7 @@ def main() -> None:
             "202611240003_lottery_public_copy.sql",
             "202611240004_lottery_mode_entries.sql",
             "202611240005_lottery_screen_default_copy.sql",
+            "202611240006_lottery_screen_enabled.sql",
         ], versions
         assert psql(
             "SELECT count(*) FROM information_schema.columns "
@@ -290,7 +291,7 @@ def main() -> None:
         assert versions_after == versions
 
         print(
-            "legacy migration ok: pre-seeded data preserved, 8 migrations recorded once, "
+            "legacy migration ok: pre-seeded data preserved, 11 migrations recorded once, "
             "failed transaction rolled back, restart idempotent"
         )
     finally:

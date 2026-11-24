@@ -18,6 +18,7 @@ NAME = f"szyca-cookie-{uuid.uuid4().hex[:8]}"
 REPORT = Path(os.environ.get("COOKIE_REPORT", "artifacts/security/secure-cookie.json"))
 ADMIN_PASSWORD = f"secure-cookie-{uuid.uuid4().hex}"
 POSTGRES_PASSWORD = f"secure-db-{uuid.uuid4().hex}"
+TEST_HOST = os.environ.get("TEST_HOST", "127.0.0.1")
 
 
 def run(args: list[str]) -> subprocess.CompletedProcess[str]:
@@ -52,7 +53,7 @@ def main() -> None:
         ])
         port_output = run(["docker", "port", NAME, "8080/tcp"]).stdout.strip().splitlines()[0]
         port = int(port_output.rsplit(":", 1)[1])
-        base = f"http://127.0.0.1:{port}"
+        base = f"http://{TEST_HOST}:{port}"
         deadline = time.time() + 60
         while time.time() < deadline:
             try:

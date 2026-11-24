@@ -89,6 +89,7 @@ def main() -> None:
         "202611240003_lottery_public_copy.sql",
         "202611240004_lottery_mode_entries.sql",
         "202611240005_lottery_screen_default_copy.sql",
+        "202611240006_lottery_screen_enabled.sql",
     ], versions
     assert psql(
         "SELECT count(*) FROM information_schema.columns "
@@ -134,7 +135,7 @@ def main() -> None:
     versions_after = psql("SELECT version FROM schema_migrations ORDER BY version").splitlines()
     assert versions_after == versions, "migrations were applied twice"
     print(
-        "migration ok: ten versions applied once; restart retained "
+        "migration ok: 11 versions applied once; restart retained "
         + json.dumps(after, ensure_ascii=False, sort_keys=True)
     )
 

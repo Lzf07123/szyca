@@ -21,10 +21,19 @@ PREVIOUS_COMMIT = os.environ.get("ROLLBACK_COMMIT", "8bc8c52")
 PROJECT = "szyca-rollback-test"
 VOLUME = f"{PROJECT}_data"
 ADMIN_PASSWORD = "rollback-test-password"
+CONTAINER_NAME = os.environ.get("TEST_CONTAINER_NAME", "szyca")
+COMPOSE_OVERRIDE = os.environ.get("TEST_COMPOSE_OVERRIDE", "")
 
 
 def run(args: list[str], cwd: Path = ROOT, **kwargs) -> subprocess.CompletedProcess[str]:
     return subprocess.run(args, cwd=cwd, check=True, text=True, capture_output=True, **kwargs)
+
+
+def compose_args() -> list[str]:
+    args = ["docker", "compose", "-p", PROJECT, "-f", "deploy/docker-compose.yml"]
+    if COMPOSE_OVERRIDE:
+        args.extend(["-f", COMPOSE_OVERRIDE])
+    return args
 
 
 def compose(action: str, image: str, port: int) -> None:
@@ -37,10 +46,7 @@ def compose(action: str, image: str, port: int) -> None:
         "POSTGRES_PASSWORD": "szyca",
         "LEGACY_ADMIN_TOKEN_ENABLED": "false",
     })
-    args = [
-        "docker", "compose", "-p", PROJECT,
-        "-f", "deploy/docker-compose.yml", action,
-    ]
+    args = [*compose_args(), action]
     if action == "up":
         args.append("-d")
     run(args, env=env)
@@ -61,7 +67,7 @@ def wait_ready(port: int) -> None:
 
 def psql(query: str) -> str:
     return run([
-        "docker", "exec", "szyca",
+        "docker", "exec", CONTAINER_NAME,
         "env", "PGPASSWORD=szyca", "psql", "-h", "127.0.0.1",
         "-U", "szyca", "-d", "szyca", "-Atc", query,
     ]).stdout.strip()
@@ -71,7 +77,7 @@ def cleanup() -> None:
     env = os.environ.copy()
     env.update({"SZYCA_IMAGE": CURRENT_IMAGE, "SZYCA_PULL_POLICY": "never"})
     subprocess.run(
-        ["docker", "compose", "-p", PROJECT, "-f", "deploy/docker-compose.yml", "down"],
+        [*compose_args(), "down"],
         cwd=ROOT,
         env=env,
         stdout=subprocess.DEVNULL,
@@ -107,10 +113,13 @@ def build_previous_image() -> None:
 
 def main() -> None:
     existing = run([
-        "docker", "ps", "-a", "--filter", "name=^/szyca$", "--format", "{{.Names}}",
+        "docker", "ps", "-a", "--filter", f"name=^/{CONTAINER_NAME}$",
+        "--format", "{{.Names}}",
     ]).stdout.strip()
     if existing:
-        raise RuntimeError("container named szyca exists; stop it before the rollback drill")
+        raise RuntimeError(
+            f"container named {CONTAINER_NAME} exists; stop it before the rollback drill"
+        )
     cleanup()
     try:
         build_previous_image()
@@ -132,12 +141,13 @@ def main() -> None:
         tables = int(psql("SELECT count(*) FROM lottery_campaigns"))
         assert tables >= 1, "new tables were lost during rollback"
         site = run([
-            "docker", "exec", "szyca", "wget", "-qO-", "http://127.0.0.1:8080/api/site",
+            "docker", "exec", CONTAINER_NAME,
+            "wget", "-qO-", "http://127.0.0.1:8080/api/site",
         ]).stdout
         assert '"sections"' in site
         previous_lottery = subprocess.run(
             [
-                "docker", "exec", "szyca", "wget", "-qO-",
+                "docker", "exec", CONTAINER_NAME, "wget", "-qO-",
                 "http://127.0.0.1:8080/api/lottery/campaign",
             ],
             stdout=subprocess.DEVNULL,

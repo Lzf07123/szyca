@@ -2,7 +2,7 @@
 ARG BASE_IMAGE_REGISTRY=
 ARG SOURCE_MIRROR=
 
-FROM ${BASE_IMAGE_REGISTRY}node:20-alpine AS frontend
+FROM ${BASE_IMAGE_REGISTRY}node:24-alpine AS frontend
 ARG SOURCE_MIRROR
 WORKDIR /app/frontend
 RUN if [ "$SOURCE_MIRROR" = "cn" ]; then \
@@ -14,7 +14,7 @@ COPY frontend/ ./
 COPY modules/ /app/modules/
 RUN npm run build
 
-FROM ${BASE_IMAGE_REGISTRY}golang:1.22-alpine AS backend
+FROM ${BASE_IMAGE_REGISTRY}golang:1.27-alpine AS backend
 ARG SOURCE_MIRROR
 WORKDIR /src
 RUN if [ "$SOURCE_MIRROR" = "cn" ]; then \
@@ -28,12 +28,13 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/server 
 
 # 单容器运行时：Nginx + Go + PostgreSQL + Redis + Supervisor。
 # 使用纯 Alpine 可避免官方 postgres 镜像继承的匿名数据卷。
-FROM ${BASE_IMAGE_REGISTRY}alpine:3.20
+FROM ${BASE_IMAGE_REGISTRY}alpine:3.24
 ARG SOURCE_MIRROR
 
 RUN if [ "$SOURCE_MIRROR" = "cn" ]; then \
         sed -i "s@dl-cdn.alpinelinux.org@mirrors.aliyun.com@g" /etc/apk/repositories; \
     fi \
+    && apk upgrade --no-cache \
     && apk add --no-cache ca-certificates nginx postgresql16 postgresql16-client redis supervisor su-exec tzdata \
     && adduser -D -H -s /sbin/nologin app \
     && mkdir -p /app/web /data/postgres /data/redis /data/uploads /run/nginx /run/postgresql \

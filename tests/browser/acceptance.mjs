@@ -579,7 +579,7 @@ async function assertFutureUptimeFormat(browser) {
 }
 
 async function axeCheck(page, label) {
-  await page.addScriptTag({ content: axe.source })
+  await page.evaluate(axe.source)
   const result = await page.evaluate(async () => {
     return window.axe.run(document, {
       runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'] },

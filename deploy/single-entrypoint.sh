@@ -1,6 +1,21 @@
 #!/bin/sh
 set -eu
 
+if [ "${ADMIN_COOKIE_SECURE:-false}" = "true" ]; then
+    if [ "${ADMIN_PASSWORD:-}" = "admin123" ]; then
+        echo "production mode requires a non-default ADMIN_PASSWORD" >&2
+        exit 1
+    fi
+    if [ "${POSTGRES_PASSWORD:-}" = "szyca" ]; then
+        echo "production mode requires a non-default POSTGRES_PASSWORD" >&2
+        exit 1
+    fi
+    if [ "${LEGACY_ADMIN_TOKEN_ENABLED:-false}" != "false" ]; then
+        echo "production mode requires LEGACY_ADMIN_TOKEN_ENABLED=false" >&2
+        exit 1
+    fi
+fi
+
 mkdir -p /data/postgres /data/redis /data/uploads /run/nginx
 chown postgres:postgres /data /data/postgres
 chown redis:redis /data/redis
