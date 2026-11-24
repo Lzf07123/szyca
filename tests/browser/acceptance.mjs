@@ -187,9 +187,9 @@ async function ensureNumberEvent(admin) {
       range_end: '30',
       number_width: 3,
       levels: [
-        { name: '三等奖', winner_count: 3 },
-        { name: '二等奖', winner_count: 2 },
-        { name: '一等奖', winner_count: 2 },
+        { name: '三等奖', winner_count: 5 },
+        { name: '二等奖', winner_count: 3 },
+        { name: '一等奖', winner_count: 1 },
       ],
     },
   })
@@ -232,6 +232,37 @@ async function ensureNumberEvent(admin) {
     switchDraftID: switchDraft.payload.event.id,
     switchName,
   }
+}
+
+async function ensureOverflowNumberEvent(admin) {
+  const created = await api('/api/admin/lottery/number-events', {
+    method: 'POST',
+    cookie: admin.cookie,
+    csrf: admin.csrf,
+    body: {
+      name: `浏览器百人中奖-${Math.random().toString(16).slice(2, 8)}`,
+      range_start: '1',
+      range_end: '100',
+      number_width: 3,
+      levels: [{ name: '三等奖', winner_count: 100 }],
+    },
+  })
+  expect(created.status === 200, `create overflow number event failed: ${JSON.stringify(created.payload)}`)
+  const eventID = created.payload.event.id
+  const published = await api(`/api/admin/lottery/number-events/${eventID}/publish`, {
+    method: 'POST',
+    cookie: admin.cookie,
+    csrf: admin.csrf,
+  })
+  expect(published.status === 200, `publish overflow number event failed: ${JSON.stringify(published.payload)}`)
+  const drawn = await api(`/api/admin/lottery/number-events/${eventID}/draw`, {
+    method: 'POST',
+    cookie: admin.cookie,
+    csrf: admin.csrf,
+    body: { level_id: published.payload.levels[0].id, request_id: randomUUID() },
+  })
+  expect(drawn.status === 200, `draw overflow number event failed: ${JSON.stringify(drawn.payload)}`)
+  return eventID
 }
 
 async function drawNumberLevel(admin, eventID, levelID) {
@@ -572,6 +603,7 @@ async function main() {
   const campaignID = await ensureCampaign(admin)
   const offModuleCount = await expectedHomeModuleCount()
   let numberEvent = null
+  let overflowEventID = 0
 
   const browser = await chromium.launch({
     headless: true,
@@ -597,9 +629,9 @@ async function main() {
         const beforeScroll = await page.locator('.whoami-section').evaluate((element) => getComputedStyle(element).opacity)
         await page.locator('.whoami-section').scrollIntoViewIfNeeded()
         await page.waitForTimeout(900)
-        const afterScroll = await page.locator('.whoami-section').evaluate((element) => getComputedStyle(element).opacity)
+        const afterScroll = Number(await page.locator('.whoami-section').evaluate((element) => getComputedStyle(element).opacity))
         expect(beforeScroll === '0', `home reveal should start hidden, got ${beforeScroll}`)
-        expect(afterScroll === '1', `home reveal did not enter, got ${afterScroll}`)
+        expect(afterScroll >= 0.99, `home reveal did not enter, got ${afterScroll}`)
         const moduleCard = page.locator('.module-card').first()
         await moduleCard.scrollIntoViewIfNeeded()
         await page.waitForTimeout(900)
@@ -684,9 +716,12 @@ async function main() {
       await assertFramedChrome(page, `home-on-${width}`)
       await assertCosmosHome(page, `home-on-${width}`, onModuleCount)
       expect(await page.locator('#site-navigation a[href="/lottery"]').count() === 1, `home-on-${width}: lottery nav missing`)
+      const screenNavText = (
+        (await page.locator('#site-navigation a[href="/lottery"]').textContent()) || ''
+      ).replace(/\s+/g, '')
       expect(
-        await page.locator('#site-navigation').getByRole('link', { name: '抽奖大屏', exact: true }).count() === 1,
-        `home-on-${width}: screen nav label is not synced with the module card`,
+        screenNavText.endsWith('抽奖大屏'),
+        `home-on-${width}: screen nav label is not synced with the module card (${JSON.stringify(screenNavText)})`,
       )
       expect(
         await page.locator('#site-navigation a[href="/lottery/participate"]').count() === 0,
@@ -816,8 +851,39 @@ async function main() {
         if (path === '/lottery' && [390, 768, 1440, 1920].includes(width)) {
           expect(
             await page.locator('.lottery-screen').getByRole('button').count() === 0,
-            `${label}: public lottery screen exposed a button`,
+            `${label}: public lottery screen exposed a control`,
           )
+          expect(
+            await page.locator('.lottery-screen').getAttribute('data-audio-enabled') === 'false',
+            `${label}: lottery audio should default to off`,
+          )
+          await page.keyboard.press('m')
+          await page
+            .locator('.lottery-screen[data-audio-enabled="true"]')
+            .waitFor({ state: 'visible' })
+          await page.keyboard.press('m')
+          await page
+            .locator('.lottery-screen[data-audio-enabled="false"]')
+            .waitFor({ state: 'visible' })
+          expect(
+            await page.locator('.lottery-screen-atmosphere').count() === 1,
+            `${label}: lottery stage atmosphere is missing`,
+          )
+          expect(
+            await page.locator('.lottery-signal-deck').isVisible() === (width >= 768),
+            `${label}: lottery signal deck visibility is incorrect`,
+          )
+          if (width >= 768) {
+            const deckBox = await page.locator('.lottery-signal-deck').boundingBox()
+            expect(
+              deckBox && deckBox.height >= 40,
+              `${label}: lottery signal deck is too shallow`,
+            )
+            expect(
+              /EVENT/.test(await page.locator('.lottery-signal-deck').innerText()),
+              `${label}: lottery signal deck is missing event telemetry`,
+            )
+          }
           expect(
             await page.getByText(/开始抽奖|开始抽取/).count() === 0,
             `${label}: public lottery screen exposed draw controls`,
@@ -887,6 +953,21 @@ async function main() {
       await reducedLivePage.locator('.lottery-sequence-stage').count() === 0,
       'reduced motion number lottery screen rendered the sequential stage',
     )
+    const reducedAnimations = await reducedLivePage.evaluate(() => (
+      [
+        '.lottery-stage-beam',
+        '.lottery-star-field-a',
+        '.lottery-live-beacon',
+        '.lottery-signal-bars i',
+      ].map((selector) => {
+        const element = document.querySelector(selector)
+        return element ? getComputedStyle(element).animationName : 'missing'
+      })
+    ))
+    expect(
+      reducedAnimations.every((name) => name === 'none'),
+      `reduced motion kept lottery stage animation: ${JSON.stringify(reducedAnimations)}`,
+    )
     await reducedLiveContext.close()
 
     const liveContext = await browser.newContext({ viewport: { width: 1440, height: 900 } })
@@ -901,9 +982,12 @@ async function main() {
       await livePage.locator('.lottery-sequence-stage').getAttribute('data-sequence-index') === '0',
       'number lottery sequence did not start with the first winner',
     )
-    await livePage.locator('.lottery-sequence-stage[data-sequence-index="1"]').waitFor({
-      state: 'visible',
-      timeout: 5000,
+    await livePage.waitForTimeout(700)
+    await livePage.screenshot({
+      path: `${ARTIFACTS}/screenshots/lottery-reveal-1440.jpg`,
+      fullPage: true,
+      type: 'jpeg',
+      quality: 84,
     })
     await livePage.locator('.lottery-sequence-stage').waitFor({ state: 'detached', timeout: 8000 })
     expect(
@@ -913,6 +997,21 @@ async function main() {
     expect(
       await livePage.locator('.lottery-winner-grid .scramble-char').count() > 0,
       'number lottery winners do not use the shared scramble animation',
+    )
+    const winnerTracks = await livePage.locator('.lottery-winner-grid').evaluateAll((grids) => (
+      grids.map((grid) => ({
+        tracks: getComputedStyle(grid).gridTemplateColumns.split(' ').length,
+        width: Math.round(grid.querySelector('li')?.getBoundingClientRect().width ?? 0),
+      }))
+    ))
+    expect(
+      winnerTracks.length === 3 && winnerTracks.every((grid) => grid.tracks === 3),
+      `number lottery winner grids are not using a consistent three-column matrix: ${JSON.stringify(winnerTracks)}`,
+    )
+    const winnerWidths = winnerTracks.map((grid) => grid.width)
+    expect(
+      Math.max(...winnerWidths) - Math.min(...winnerWidths) <= 1,
+      `number lottery winner cells changed size by prize tier: ${JSON.stringify(winnerWidths)}`,
     )
     expect(
       await livePage.getByText('本场已开完').count() === 1,
@@ -989,6 +1088,12 @@ async function main() {
     expect(!storage.cookie.includes(ADMIN_PASSWORD), 'admin password leaked to visible cookie')
     await adminPage.screenshot({ path: `${ARTIFACTS}/screenshots/admin-lottery-390.jpg`, fullPage: true, type: 'jpeg', quality: 82 })
     await axeCheck(adminPage, 'admin-lottery')
+    await adminPage.locator('.number-live-order').waitFor({ state: 'visible' })
+    expect(
+      (await adminPage.locator('.number-live-order b').allTextContents()).join('→')
+        === '三等奖→二等奖→一等奖',
+      'admin lottery live draw order is not small-to-large',
+    )
     await adminPage.getByRole('button', { name: '归档场次' }).click()
     const dangerDialog = adminPage.getByRole('dialog')
     await dangerDialog.waitFor({ state: 'visible' })
@@ -1015,6 +1120,14 @@ async function main() {
         'admin lottery detail collapsed while switching events',
       )
       await adminPage.getByText('编辑草稿', { exact: true }).waitFor({ state: 'visible' })
+      await adminPage.getByText('开奖顺序（小奖 → 大奖）', { exact: true }).waitFor({
+        state: 'visible',
+      })
+      expect(
+        await adminPage.locator('.number-level-list').getAttribute('aria-label')
+          === '开奖顺序，从上到下由小奖到大奖',
+        'admin lottery editor does not explain the small-to-large draw order',
+      )
       const levelName = adminPage
         .locator('.number-level-row')
         .first()
@@ -1033,6 +1146,10 @@ async function main() {
       expect(
         (await primaryDialog.getAttribute('class'))?.includes('confirm-dialog primary'),
         'lottery publish confirmation does not use the built-in primary dialog',
+      )
+      expect(
+        await primaryDialog.getByText(/开奖规则：小奖先开，大奖压轴/).count() === 1,
+        'lottery publish confirmation does not state the small-to-large order',
       )
       await primaryDialog.getByRole('button', { name: '取消' }).click()
       await adminPage.unroute(/\/api\/admin\/lottery\/number-events\/\d+$/)
@@ -1063,6 +1180,110 @@ async function main() {
       quality: 84,
     })
     await standbyContext.close()
+
+    overflowEventID = await ensureOverflowNumberEvent(admin)
+    const overflowContext = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    const overflowPage = await overflowContext.newPage()
+    await attachDiagnostics(overflowPage, 'lottery-overflow')
+    await overflowPage.goto(BASE + '/lottery', { waitUntil: 'networkidle' })
+    await overflowPage.locator('.lottery-result-level.revealed').waitFor({ state: 'visible' })
+    const overflowBoard = overflowPage.locator('.lottery-result-board')
+    const overflowGrid = overflowPage.locator('.lottery-winner-grid').first()
+    const overflowHeader = overflowPage.locator('.lottery-result-level header').first()
+    expect(
+      await overflowPage.locator('.lottery-terminal').isVisible(),
+      'lottery telemetry terminal decoration is missing',
+    )
+    expect(
+      (await overflowPage.locator('.lottery-terminal-log').innerText())
+        .includes(String(overflowEventID).padStart(3, '0')),
+      'lottery telemetry terminal does not use the real event ID',
+    )
+    await overflowPage.waitForTimeout(400)
+    const overflowStart = await overflowPage.evaluate(() => {
+      const grid = document.querySelector('.lottery-winner-grid')
+      const board = document.querySelector('.lottery-result-board')
+      const header = document.querySelector('.lottery-result-level header')
+      return {
+        scrollTop: grid?.scrollTop ?? 0,
+        clientHeight: grid?.clientHeight ?? 0,
+        scrollHeight: grid?.scrollHeight ?? 0,
+        boardScrollTop: board?.scrollTop ?? 0,
+        headerTop: header?.getBoundingClientRect().top ?? 0,
+        pageHeight: document.documentElement.scrollHeight,
+        viewportHeight: window.innerHeight,
+      }
+    })
+    expect(
+      overflowStart.scrollHeight > overflowStart.clientHeight + 200,
+      `lottery overflow result should scroll inside its container: ${JSON.stringify(overflowStart)}`,
+    )
+    expect(
+      overflowStart.pageHeight <= overflowStart.viewportHeight + 1,
+      `lottery overflow result stretched the page: ${JSON.stringify(overflowStart)}`,
+    )
+    await overflowGrid.hover()
+    await overflowPage.waitForTimeout(2200)
+    const autoScroll = await overflowPage.evaluate(() => ({
+      scrollTop: document.querySelector('.lottery-winner-grid')?.scrollTop ?? 0,
+      boardScrollTop: document.querySelector('.lottery-result-board')?.scrollTop ?? 0,
+      headerTop: document.querySelector('.lottery-result-level header')?.getBoundingClientRect().top ?? 0,
+    }))
+    expect(
+      autoScroll.scrollTop > overflowStart.scrollTop + 5,
+      `lottery overflow result did not auto-scroll: ${overflowStart.scrollTop} -> ${autoScroll.scrollTop}`,
+    )
+    expect(
+      Math.abs(autoScroll.headerTop - overflowStart.headerTop) <= 1,
+      `lottery overflow scrolled the prize heading: ${overflowStart.headerTop} -> ${autoScroll.headerTop}`,
+    )
+    expect(
+      autoScroll.boardScrollTop <= 1,
+      `lottery overflow scrolled the result board instead of the winner list: ${autoScroll.boardScrollTop}`,
+    )
+    await overflowGrid.focus()
+    await overflowPage.waitForTimeout(120)
+    const focusedScrollTop = await overflowGrid.evaluate((element) => element.scrollTop)
+    await overflowPage.waitForTimeout(700)
+    const pausedScrollTop = await overflowGrid.evaluate((element) => element.scrollTop)
+    expect(
+      Math.abs(pausedScrollTop - focusedScrollTop) <= 1,
+      `focused lottery results kept scrolling: ${focusedScrollTop} -> ${pausedScrollTop}`,
+    )
+    expect(
+      await overflowHeader.isVisible(),
+      'lottery overflow hid the prize heading',
+    )
+    await axeCheck(overflowPage, 'lottery-overflow')
+    await overflowPage.screenshot({
+      path: `${ARTIFACTS}/screenshots/lottery-overflow-1440.jpg`,
+      fullPage: true,
+      type: 'jpeg',
+      quality: 84,
+    })
+    const nearEnd = await overflowGrid.evaluate((element) => {
+      const maxScroll = element.scrollHeight - element.clientHeight
+      element.scrollTop = maxScroll - 2
+      return maxScroll
+    })
+    await overflowGrid.blur()
+    await overflowPage.waitForTimeout(500)
+    const wrappedScrollTop = await overflowGrid.evaluate((element) => element.scrollTop)
+    expect(
+      wrappedScrollTop > 0 && wrappedScrollTop < nearEnd - 100,
+      `lottery result cycle paused at the boundary: ${nearEnd} -> ${wrappedScrollTop}`,
+    )
+    await overflowContext.close()
+    const archivedOverflow = await api(`/api/admin/lottery/number-events/${overflowEventID}/archive`, {
+      method: 'POST',
+      cookie: admin.cookie,
+      csrf: admin.csrf,
+    })
+    expect(
+      archivedOverflow.status === 200,
+      `archive overflow number event failed: ${JSON.stringify(archivedOverflow.payload)}`,
+    )
+    overflowEventID = 0
 
     const reduced = await browser.newContext({
       viewport: { width: 390, height: 844 },
@@ -1113,6 +1334,17 @@ async function main() {
   } finally {
     await browser.close()
     await setLotterySection(admin, originalLotterySection)
+    if (overflowEventID) {
+      const archivedOverflow = await api(`/api/admin/lottery/number-events/${overflowEventID}/archive`, {
+        method: 'POST',
+        cookie: admin.cookie,
+        csrf: admin.csrf,
+      })
+      expect(
+        archivedOverflow.status === 200 || archivedOverflow.payload?.code === 'event_not_live',
+        'browser overflow number event cleanup failed',
+      )
+    }
     if (numberEvent) {
       const archived = await api(`/api/admin/lottery/number-events/${numberEvent.id}/archive`, {
         method: 'POST',

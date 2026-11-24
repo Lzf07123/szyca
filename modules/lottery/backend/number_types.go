@@ -13,7 +13,7 @@ var (
 	ErrNumberLiveExists     = errors.New("已有上线中的号码抽奖场次")
 	ErrNumberDrawComplete   = errors.New("当前场次所有等级均已开奖")
 	ErrNumberDrawOutOfOrder = errors.New(
-		"只能按顺序开奖下一个待开等级",
+		"只能按小奖到大奖的顺序开奖下一个待开等级",
 	)
 	ErrNumberLevelDrawn  = errors.New("该等级已经开奖")
 	ErrNumberDrawRequest = errors.New("开奖请求冲突")

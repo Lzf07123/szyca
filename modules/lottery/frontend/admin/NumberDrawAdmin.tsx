@@ -65,8 +65,10 @@ const blankEvent: EventForm = {
   range_start: '1',
   range_end: '100',
   number_width: 3,
-  levels: [{ clientKey: 'default-level', name: '一等奖', winner_count: 1 }],
+  levels: [{ clientKey: 'default-level', name: '三等奖', winner_count: 1 }],
 }
+
+const levelExamples = ['三等奖', '二等奖', '一等奖', '特等奖']
 
 const statusLabel: Record<NumberEvent['status'], string> = {
   draft: '草稿',
@@ -107,6 +109,13 @@ function formatTime(value?: string) {
   return value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : ''
 }
 
+function levelRoundLabel(index: number, total: number) {
+  if (total === 1) return '唯一奖项'
+  if (index === 0) return '开场 · 小奖'
+  if (index === total - 1) return '压轴 · 大奖'
+  return '中间奖项'
+}
+
 export default function NumberDrawAdmin({
   onMessage,
 }: {
@@ -129,6 +138,7 @@ export default function NumberDrawAdmin({
     [detail],
   )
   const totalWinners = form.levels.reduce((total, level) => total + Math.max(0, level.winner_count), 0)
+  const drawOrder = form.levels.map((level) => level.name.trim() || '待填写').join(' → ')
   const isDraft = selectedID === 0 || detail?.event.status === 'draft'
   const formValid = Boolean(
     form.name.trim() &&
@@ -320,11 +330,12 @@ export default function NumberDrawAdmin({
     if (!detail || !formValid || interactionLocked) return
     setConfirmRequest({
       title: `上线「${detail.event.name}」到大屏？`,
-      message: '上线后号码范围、显示位宽和中奖等级将永久锁定。',
+      message: '上线后号码范围、显示位宽和开奖顺序将永久锁定。',
       details: [
         `号码范围：${form.range_start}–${form.range_end}`,
         `显示位宽：${form.number_width} 位`,
-        `中奖配置：${form.levels.length} 个等级，共 ${totalWinners} 个号码`,
+        `开奖顺序：${drawOrder}`,
+        `开奖规则：小奖先开，大奖压轴；共 ${totalWinners} 个号码`,
         '同一时间只能有一个场次处于上线状态',
       ],
       confirmLabel: '确认上线',
@@ -364,11 +375,13 @@ export default function NumberDrawAdmin({
 
   const requestDraw = () => {
     if (!detail || !nextLevel || interactionLocked) return
+    const levelIndex = detail.levels.findIndex((level) => level.id === nextLevel.id)
     setConfirmRequest({
       title: `开始逐号抽取「${nextLevel.name}」？`,
       message: `本次将从 ${detail.event.range_start}–${detail.event.range_end} 中生成 ${nextLevel.winner_count} 个中奖号码，并在大屏逐号揭晓。`,
       details: [
-        `中奖等级：${nextLevel.name}`,
+        `当前轮次：第 ${levelIndex + 1} / ${detail.levels.length} 轮`,
+        `本轮奖项：${nextLevel.name}（按小奖 → 大奖顺序）`,
         `中奖人数：${nextLevel.winner_count} 个号码`,
         '开奖结果提交后不可撤回或重抽',
       ],
@@ -464,7 +477,7 @@ export default function NumberDrawAdmin({
           </div>
         </div>
         <p className="muted number-overview-copy">
-          号码与用户身份解耦。上线后配置锁定，只能按顺序逐级开奖；同一时间最多一个场次在大屏展示。
+          号码与用户身份解耦。上线后配置锁定，只能按小奖 → 大奖的列表顺序逐级开奖；同一时间最多一个场次在大屏展示。
         </p>
         <div className="number-event-list">
           {events.map((event) => (
@@ -548,23 +561,31 @@ export default function NumberDrawAdmin({
 
           <div className="number-level-head">
             <div>
-              <h3>中奖等级</h3>
-              <p>从上到下依次开奖；单场总中奖人数不超过 100。</p>
+              <h3>开奖顺序（小奖 → 大奖）</h3>
+              <p id="number-level-order-help">第 1 轮先开小奖，最后 1 轮开大奖；该顺序会锁定为大屏揭晓顺序。单场总中奖人数不超过 100。</p>
             </div>
             <span className={totalWinners > 100 ? 'error' : 'muted'}>
               已配置 {totalWinners} / 100 人
             </span>
           </div>
-          <div className="number-level-list">
+          <div
+            className="number-level-list"
+            role="list"
+            aria-label="开奖顺序，从上到下由小奖到大奖"
+            aria-describedby="number-level-order-help"
+          >
             {form.levels.map((level, index) => (
-              <div className="number-level-row" key={level.clientKey}>
-                <span className="number-level-order">{String(index + 1).padStart(2, '0')}</span>
+              <div className="number-level-row" key={level.clientKey} role="listitem">
+                <span className="number-level-order">
+                  <b>第 {index + 1} 轮</b>
+                  <small>{levelRoundLabel(index, form.levels.length)}</small>
+                </span>
                 <label>
                   <span>等级名称</span>
                   <input
                     value={level.name}
                     maxLength={40}
-                    placeholder="一等奖"
+                    placeholder={`例如：${levelExamples[index] ?? '自定义奖项'}`}
                     onChange={(event) => updateLevel(index, { name: event.target.value })}
                   />
                 </label>
@@ -581,8 +602,8 @@ export default function NumberDrawAdmin({
                   />
                 </label>
                 <div className="number-level-actions">
-                  <button className="mini-btn" type="button" disabled={index === 0} onClick={() => moveLevel(index, -1)}>上移</button>
-                  <button className="mini-btn" type="button" disabled={index === form.levels.length - 1} onClick={() => moveLevel(index, 1)}>下移</button>
+                  <button className="mini-btn" type="button" disabled={index === 0} onClick={() => moveLevel(index, -1)}>提前一轮</button>
+                  <button className="mini-btn" type="button" disabled={index === form.levels.length - 1} onClick={() => moveLevel(index, 1)}>延后一轮</button>
                   <button className="mini-btn danger" type="button" disabled={form.levels.length === 1} onClick={() => removeLevel(index)}>删除</button>
                 </div>
               </div>
@@ -628,10 +649,22 @@ export default function NumberDrawAdmin({
               <div><span>开奖进度</span><strong>{detail.levels.filter((level) => level.state === 'revealed').length}/{detail.levels.length} 级</strong></div>
               <div><span>上线时间</span><strong>{formatTime(detail.event.published_at) || '-'}</strong></div>
             </div>
+            <div className="number-live-order">
+              <span>开奖顺序 · 小奖先开</span>
+              <p>
+                {detail.levels.map((level, index) => (
+                  <span key={level.id}>
+                    {index > 0 && <i aria-hidden="true">→</i>}
+                    <b>{level.name}</b>
+                  </span>
+                ))}
+              </p>
+              <small>大奖压轴</small>
+            </div>
             {detail.event.status === 'live' && (
               <div className="number-draw-action">
                 <div>
-                  <span>下一轮</span>
+                  <span>下一轮 · 按小奖 → 大奖推进</span>
                   <strong>{nextLevel ? `${nextLevel.name} · ${nextLevel.winner_count} 人` : '全部等级已开奖'}</strong>
                   <p>{nextLevel ? '结果提交后在大屏逐号揭晓并永久保留。' : '可继续保留最终总榜，或归档场次。'}</p>
                 </div>
@@ -661,7 +694,7 @@ export default function NumberDrawAdmin({
                 <p className="section-eyebrow">RESULT LEDGER</p>
                 <h2>{detail.event.status === 'archived' ? '历史开奖结果' : '实时开奖结果'}</h2>
               </div>
-              <span className="muted">共 {detail.levels.reduce((total, level) => total + level.winners.length, 0)} 个中奖号码</span>
+              <span className="muted">按开奖顺序排列 · 共 {detail.levels.reduce((total, level) => total + level.winners.length, 0)} 个中奖号码</span>
             </div>
             <div className="number-result-list">
               {detail.levels.map((level) => (

@@ -638,7 +638,7 @@ func (s *NumberService) ExportRows(
 		JOIN lottery_number_draws d ON d.id = w.draw_id
 		LEFT JOIN admin_accounts a ON a.id = d.operator_id
 		WHERE w.event_id = $1
-		ORDER BY l.sort, l.id, w.number`,
+		ORDER BY l.sort, l.id, w.position`,
 		eventID,
 	)
 	if err != nil {
@@ -773,7 +773,7 @@ func (s *NumberService) loadLevels(
 		SELECT level_id, number
 		FROM lottery_number_winners
 		WHERE event_id = $1
-		ORDER BY level_id, number`,
+		ORDER BY level_id, position`,
 		eventID,
 	)
 	if err != nil {
@@ -829,7 +829,7 @@ func (s *NumberService) drawResult(
 		JOIN lottery_number_events e ON e.id = d.event_id
 		JOIN lottery_number_winners w ON w.draw_id = d.id
 		WHERE d.id = $1
-		ORDER BY w.number`,
+		ORDER BY w.position`,
 		draw.ID,
 	)
 	if err != nil {

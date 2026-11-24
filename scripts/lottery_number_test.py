@@ -173,6 +173,7 @@ def main() -> None:
     first_event = first["event"]
     first_levels = first["levels"]
     assert first_event["status"] == "draft"
+    assert [level["name"] for level in first_levels] == ["三等奖", "一等奖"]
     assert all(level["state"] == "pending" for level in first_levels)
 
     publish(admin, first_event["id"])
@@ -251,6 +252,8 @@ def main() -> None:
     expect(status, board, 200, "completed public number board")
     assert board["event"]["completed"] is True
     assert sum(len(level["winners"]) for level in board["levels"]) == 5
+    assert board["levels"][0]["winners"] == winners
+    assert board["levels"][1]["winners"] == second_winners
     assert "request_id" not in json.dumps(board)
     assert "operator" not in json.dumps(board)
 

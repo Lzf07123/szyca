@@ -180,6 +180,8 @@
 ```
 
 - 号码范围和中奖号码以十进制字符串返回，避免浏览器大整数精度丢失。
+- `winners` 按服务端开奖生成顺序返回，不按号码数值排序；该顺序由持久化
+  `position` 决定，刷新页面或重连 WebSocket 后保持稳定。
 - 无上线场次时 `event` 为 `null`；号码大屏模式关闭时 `enabled` 为 `false`。
 - 公开响应不包含操作员、请求 ID、其他后台配置。
 
@@ -335,7 +337,8 @@
 | POST | `/api/admin/lottery/draws/{id}/claim` | `lottery.claim` |
 
 号码场次状态为 `draft / live / archived`，同一时间最多一个 `live` 场次。
-`draw` 请求体为 `{level_id, request_id}`，只能按顺序触发下一个待开等级；
+`draw` 请求体为 `{level_id, request_id}`，`levels` 数组顺序即开奖顺序，必须按小奖到大奖
+排列，只能触发数组中的下一个待开等级；
 相同请求重放返回原结果且不会重复扣减号码。
 升级后的模式默认值为号码大屏开启、个人抽取关闭，模块总开关仍单独控制整个抽奖模块。
 
