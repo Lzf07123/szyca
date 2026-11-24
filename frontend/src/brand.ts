@@ -131,7 +131,7 @@ export const FALLBACK_SITE: SiteData = {
     police: '',
     police_icon: '',
     links: [
-      { label: '关于协会', href: '/#about' },
+      { label: '关于协会', href: '/about' },
       ...MODULE_CATALOG
         .filter((module) => module.footer_label && module.path)
         .sort((a, b) => (a.nav_order ?? 0) - (b.nav_order ?? 0))

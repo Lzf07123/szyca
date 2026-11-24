@@ -291,6 +291,76 @@ func TestNormalizeSectionDeletes(t *testing.T) {
 	}
 }
 
+func TestNormalizePageUpdate(t *testing.T) {
+	tests := []struct {
+		name   string
+		update PageUpdate
+		want   string
+	}{
+		{
+			name: "valid",
+			update: PageUpdate{
+				Title:   "  关于协会  ",
+				Summary: "  摘要  ",
+				Body:    "  正文  ",
+				Status:  "published",
+			},
+		},
+		{
+			name: "missing title",
+			update: PageUpdate{
+				Status: "draft",
+			},
+			want: "标题",
+		},
+		{
+			name: "invalid status",
+			update: PageUpdate{
+				Title:  "关于协会",
+				Status: "hidden",
+			},
+			want: "发布状态",
+		},
+		{
+			name: "body too long",
+			update: PageUpdate{
+				Title:  "关于协会",
+				Body:   strings.Repeat("会", 20001),
+				Status: "draft",
+			},
+			want: "内容过长",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			update := test.update
+			err := normalizePageUpdate(&update)
+			if test.want == "" {
+				if err != nil {
+					t.Fatalf("valid page rejected: %v", err)
+				}
+				if update.Title != "关于协会" || update.Summary != "摘要" || update.Body != "正文" {
+					t.Fatalf("normalized page = %+v", update)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("error = %v, want substring %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestPublicFooterLinksTracksAboutPagePublication(t *testing.T) {
+	published := publicFooterLinks(map[string]bool{}, true)
+	if len(published) != 1 || published[0].Label != "关于协会" || published[0].Href != "/about" {
+		t.Fatalf("published about links = %+v", published)
+	}
+	if unpublished := publicFooterLinks(map[string]bool{}, false); len(unpublished) != 0 {
+		t.Fatalf("unpublished about links = %+v", unpublished)
+	}
+}
+
 func mustBuiltinSectionPluginRegistry(t *testing.T) *sectionPluginRegistry {
 	t.Helper()
 	registry, err := newSectionPluginRegistry(builtinSectionPlugins()...)

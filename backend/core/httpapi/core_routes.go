@@ -38,6 +38,8 @@ func (s *Server) registerCoreRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/audit", s.withPermission("audit.read", s.handleAdminAudit))
 
 	mux.HandleFunc("GET /api/admin/site", s.withPermission("site.read", s.handleAdminSite))
+	mux.HandleFunc("GET /api/admin/content/pages/{slug}", s.withPermission("site.read", s.handleAdminContentPage))
+	mux.HandleFunc("PUT /api/admin/content/pages/{slug}", s.withPermission("site.write", s.handleAdminSaveContentPage))
 	mux.HandleFunc("GET /api/admin/site/sections", s.withPermission("site.read", s.handleAdminSections))
 	mux.HandleFunc("GET /api/admin/site/section-plugins", s.withPermission("site.read", s.handleAdminSectionPlugins))
 	mux.HandleFunc("PUT /api/admin/site/sections", s.withPermission("site.write", s.handleAdminSaveSections))

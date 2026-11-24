@@ -129,6 +129,16 @@ export interface SiteQrcode {
   image_url: string
 }
 
+export interface SitePage {
+  slug: string
+  title: string
+  summary: string
+  body: string
+  status: 'draft' | 'published' | 'archived'
+  published_at?: string
+  updated_at: string
+}
+
 export interface SiteData {
   brand: Brand
   nav: NavItem[]

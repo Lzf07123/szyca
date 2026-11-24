@@ -7,6 +7,7 @@ import type {
   SectionPluginField,
   SectionPluginManifest,
   SiteFeature,
+  SitePage,
 } from '../../api/site'
 import {
   sectionConfigItems,
@@ -97,6 +98,15 @@ function sectionSignature(sections: ManagedSection[], deletedIDs: number[]) {
       }))
       .sort((a, b) => a.id - b.id),
     deleted_ids: [...deletedIDs].sort((a, b) => a - b),
+  })
+}
+
+function pageSignature(page: SitePage) {
+  return JSON.stringify({
+    title: page.title,
+    summary: page.summary,
+    body: page.body,
+    status: page.status,
   })
 }
 
@@ -351,11 +361,14 @@ export default function SiteEditor({
   const [sections, setSections] = useState<ManagedSection[]>([])
   const [features, setFeatures] = useState<SiteFeature[]>([])
   const [sectionPlugins, setSectionPlugins] = useState<SectionPluginManifest[]>([])
+  const [page, setPage] = useState<SitePage | null>(null)
   const [loading, setLoading] = useState(true)
   const [savingFeatures, setSavingFeatures] = useState(false)
   const [savingSections, setSavingSections] = useState(false)
+  const [savingPage, setSavingPage] = useState(false)
   const [savedFeatures, setSavedFeatures] = useState<SiteFeature[] | null>(null)
   const [savedSections, setSavedSections] = useState<ManagedSection[] | null>(null)
+  const [savedPage, setSavedPage] = useState<SitePage | null>(null)
   const [deletedSections, setDeletedSections] = useState<ManagedSection[]>([])
   const [expandedSectionID, setExpandedSectionID] = useState<number | null>(null)
   const [showSectionPicker, setShowSectionPicker] = useState(false)
@@ -371,7 +384,11 @@ export default function SiteEditor({
         !== sectionSignature(savedSections, []),
     [deletedSections, savedSections, sections],
   )
-  const dirty = featuresDirty || sectionsDirty
+  const pageDirty = useMemo(
+    () => page !== null && savedPage !== null && pageSignature(page) !== pageSignature(savedPage),
+    [page, savedPage],
+  )
+  const dirty = featuresDirty || sectionsDirty || pageDirty
   const canEditFeature = (featureKey: string) => (
     canWrite && can(featureWriteCapability(featureKey) ?? 'site.write')
   )
@@ -390,10 +407,14 @@ export default function SiteEditor({
   const load = async () => {
     setLoading(true)
     try {
-      const [sectionData, featureData, pluginData] = await Promise.all([
+      const [sectionData, featureData, pluginData, pageData] = await Promise.all([
         api<{ sections: ManagedSection[] }>('/api/admin/site/sections'),
         api<{ features: SiteFeature[] }>('/api/admin/platform/features'),
         api<{ plugins: SectionPluginManifest[] }>('/api/admin/site/section-plugins'),
+        api<{ page: SitePage }>('/api/admin/content/pages/about').catch((cause) => {
+          onMessage((cause as Error).message, true)
+          return null
+        }),
       ])
       const nextSections = normalizeSections(sectionData.sections)
       setSections(nextSections)
@@ -404,6 +425,8 @@ export default function SiteEditor({
       setFeatures(featureData.features)
       setSavedFeatures(featureData.features)
       setSectionPlugins(pluginData.plugins)
+      setPage(pageData?.page ?? null)
+      setSavedPage(pageData?.page ?? null)
     } catch (cause) {
       onMessage((cause as Error).message, true)
     } finally {
@@ -558,6 +581,32 @@ export default function SiteEditor({
     }
   }
 
+  const savePage = async () => {
+    if (!canWrite || !page || savingPage || !pageDirty) return
+    setSavingPage(true)
+    try {
+      const response = await api<{ page: SitePage }>('/api/admin/content/pages/about', {
+        method: 'PUT',
+        body: JSON.stringify({
+          title: page.title,
+          summary: page.summary,
+          body: page.body,
+          status: page.status,
+        }),
+      })
+      setPage(response.page)
+      setSavedPage(response.page)
+      await onSaved()
+      onMessage(response.page.status === 'published'
+        ? '关于协会页已保存并发布'
+        : '关于协会页已保存，当前未公开')
+    } catch (cause) {
+      onMessage((cause as Error).message, true)
+    } finally {
+      setSavingPage(false)
+    }
+  }
+
   const saveFeatures = async () => {
     if (!canWrite || savingFeatures || !featuresDirty) return
     const editable = features.filter((feature) => canEditFeature(feature.key))
@@ -589,6 +638,89 @@ export default function SiteEditor({
           当前角色可查看站点配置，但没有编辑与发布权限。
         </div>
       )}
+
+      <section className="card admin-section-card" aria-busy={savingPage}>
+        <div className="panel-head">
+          <div>
+            <p className="section-eyebrow">FOOTER CONTENT</p>
+            <h2>关于协会页</h2>
+            <p className="muted">页脚“关于协会”入口对应此页面。发布后入口公开显示，草稿或归档时自动隐藏。</p>
+          </div>
+          <div className="panel-head-actions">
+            {pageDirty && <span className="status-chip unsaved">有未保存内容</span>}
+            {page?.status === 'published' && (
+              <a className="mini-btn" href="/about" target="_blank" rel="noreferrer">
+                打开页面
+              </a>
+            )}
+            {canWrite && (
+              <button
+                className="btn btn-primary"
+                type="button"
+                disabled={savingPage || !pageDirty}
+                onClick={() => void savePage()}
+              >
+                {savingPage ? '保存中…' : '保存关于协会'}
+              </button>
+            )}
+          </div>
+        </div>
+        {page ? (
+          <>
+            <div className="form-grid">
+              <label className="field">
+                页面标题
+                <input
+                  value={page.title}
+                  maxLength={120}
+                  disabled={!canWrite}
+                  onChange={(event) => setPage({ ...page, title: event.target.value })}
+                />
+              </label>
+              <label className="field">
+                发布状态
+                <select
+                  value={page.status}
+                  disabled={!canWrite}
+                  onChange={(event) => setPage({
+                    ...page,
+                    status: event.target.value as SitePage['status'],
+                  })}
+                >
+                  <option value="draft">草稿（不公开）</option>
+                  <option value="published">已发布</option>
+                  <option value="archived">已归档</option>
+                </select>
+              </label>
+            </div>
+            <label className="field">
+              页面摘要
+              <input
+                value={page.summary}
+                maxLength={300}
+                disabled={!canWrite}
+                placeholder="显示在标题下方，也用于页面描述"
+                onChange={(event) => setPage({ ...page, summary: event.target.value })}
+              />
+            </label>
+            <label className="field">
+              页面正文
+              <textarea
+                rows={10}
+                value={page.body}
+                maxLength={20000}
+                disabled={!canWrite}
+                placeholder="每行显示为一段正文"
+                onChange={(event) => setPage({ ...page, body: event.target.value })}
+              />
+            </label>
+          </>
+        ) : (
+          <div className="read-only-note" role="alert">
+            未找到站内的“关于协会”内容页，请检查站点迁移是否已完成。
+          </div>
+        )}
+      </section>
 
       <section
         className="card admin-section-card site-module-switches"

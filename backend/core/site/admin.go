@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type AdminBackground struct {
@@ -13,6 +15,23 @@ type AdminBackground struct {
 	FilePath  string    `json:"file_path"`
 	Active    bool      `json:"active"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type AdminPage struct {
+	Slug        string     `json:"slug"`
+	Title       string     `json:"title"`
+	Summary     string     `json:"summary"`
+	Body        string     `json:"body"`
+	Status      string     `json:"status"`
+	PublishedAt *time.Time `json:"published_at,omitempty"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
+type PageUpdate struct {
+	Title   string `json:"title"`
+	Summary string `json:"summary"`
+	Body    string `json:"body"`
+	Status  string `json:"status"`
 }
 
 func (s *Service) Footer(ctx context.Context) (*Footer, error) {
@@ -60,6 +79,100 @@ func (s *Service) SaveFooter(ctx context.Context, footer *Footer) error {
 		footer.ICPIcon, footer.Police, footer.PoliceIcon,
 	)
 	return err
+}
+
+func (s *Service) AdminPage(ctx context.Context, slug string) (*AdminPage, error) {
+	page := &AdminPage{}
+	err := s.pool.QueryRow(ctx, `
+		SELECT slug, title, summary, body, status, published_at, updated_at
+		FROM site_pages
+		WHERE slug = $1`,
+		slug,
+	).Scan(
+		&page.Slug,
+		&page.Title,
+		&page.Summary,
+		&page.Body,
+		&page.Status,
+		&page.PublishedAt,
+		&page.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read content page: %w", err)
+	}
+	return page, nil
+}
+
+func (s *Service) SavePage(
+	ctx context.Context,
+	slug string,
+	updatedBy int64,
+	update *PageUpdate,
+) (*AdminPage, error) {
+	if err := normalizePageUpdate(update); err != nil {
+		return nil, err
+	}
+	page := &AdminPage{}
+	err := s.pool.QueryRow(ctx, `
+		UPDATE site_pages
+		SET title = $2,
+			summary = $3,
+			body = $4,
+			status = $5,
+			published_at = CASE
+				WHEN $5 = 'published' THEN COALESCE(published_at, now())
+				ELSE published_at
+			END,
+			updated_by = $6,
+			updated_at = now()
+		WHERE slug = $1
+		RETURNING slug, title, summary, body, status, published_at, updated_at`,
+		slug,
+		update.Title,
+		update.Summary,
+		update.Body,
+		update.Status,
+		updatedBy,
+	).Scan(
+		&page.Slug,
+		&page.Title,
+		&page.Summary,
+		&page.Body,
+		&page.Status,
+		&page.PublishedAt,
+		&page.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, errors.New("内容页面不存在")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("save content page: %w", err)
+	}
+	return page, nil
+}
+
+func normalizePageUpdate(update *PageUpdate) error {
+	update.Title = strings.TrimSpace(update.Title)
+	update.Summary = strings.TrimSpace(update.Summary)
+	update.Body = strings.TrimSpace(update.Body)
+	update.Status = strings.TrimSpace(update.Status)
+	if update.Title == "" {
+		return errors.New("页面标题不能为空")
+	}
+	switch update.Status {
+	case "draft", "published", "archived":
+	default:
+		return errors.New("页面发布状态无效")
+	}
+	if len([]rune(update.Title)) > 120 ||
+		len([]rune(update.Summary)) > 300 ||
+		len([]rune(update.Body)) > 20000 {
+		return errors.New("页面内容过长")
+	}
+	return nil
 }
 
 func (s *Service) Logo(ctx context.Context) (string, error) {

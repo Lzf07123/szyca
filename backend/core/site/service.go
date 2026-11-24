@@ -213,7 +213,11 @@ func (s *Service) Public(ctx context.Context) (*Public, error) {
 	if err != nil {
 		return nil, err
 	}
-	footer.Links = publicFooterLinks(enabled)
+	aboutPage, err := s.Page(ctx, "about")
+	if err != nil {
+		return nil, err
+	}
+	footer.Links = publicFooterLinks(enabled, aboutPage != nil)
 	title := s.defaultTitle
 	if title == "" {
 		title = "计算机协会 · 官网"
@@ -809,8 +813,11 @@ func sectionConfigText(
 	return ""
 }
 
-func publicFooterLinks(enabled map[string]bool) []FooterLink {
-	links := []FooterLink{{Label: "关于协会", Href: "/#about"}}
+func publicFooterLinks(enabled map[string]bool, includeAbout bool) []FooterLink {
+	links := []FooterLink{}
+	if includeAbout {
+		links = append(links, FooterLink{Label: "关于协会", Href: "/about"})
+	}
 	manifests := modulecatalog.All()
 	sort.SliceStable(manifests, func(i, j int) bool {
 		return manifests[i].NavOrder < manifests[j].NavOrder

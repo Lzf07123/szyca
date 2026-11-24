@@ -52,7 +52,7 @@ docker compose -f deploy/docker-compose.yml logs --tail=100 szyca
 
 ## 3. 项目地图
 
-项目是汕头职业技术学院计算机协会官网与招新答题系统，采用 Go 1.22、PostgreSQL、
+项目是汕头职业技术学院计算机协会官网与招新答题系统，采用 Go 1.27、PostgreSQL、
 Redis、React 18、Vite、Nginx。生产形态固定为单镜像、单容器、单数据卷；Nginx 对外
 8080，Go 监听容器内 8081，PostgreSQL 与 Redis 只监听容器回环地址。
 
@@ -155,9 +155,9 @@ Redis、React 18、Vite、Nginx。生产形态固定为单镜像、单容器、�
 按“先写后校验”更新注册产物：
 
 ```bash
-docker run --rm -v "$PWD:/src" -w /src golang:1.22-alpine \
+docker run --rm -v "$PWD:/src" -w /src golang:1.27-alpine \
   go run ./cmd/modulegen --write
-docker run --rm -v "$PWD:/src" -w /src golang:1.22-alpine \
+docker run --rm -v "$PWD:/src" -w /src golang:1.27-alpine \
   go run ./cmd/modulegen --check
 ```
 
@@ -266,26 +266,26 @@ docker run --rm -v "$PWD:/src" -w /src python:3.12-alpine \
 
 ```bash
 # 单包（把路径替换为实际 Go 包）
-docker run --rm -v "$PWD:/src" -w /src golang:1.22-alpine \
+docker run --rm -v "$PWD:/src" -w /src golang:1.27-alpine \
   go test ./modules/quiz/backend
 
 # 仅首次或 lock 变化时安装前端依赖；node_modules 在工作区且已忽略
-docker run --rm -v "$PWD:/src" -w /src/frontend node:20-alpine \
+docker run --rm -v "$PWD:/src" -w /src/frontend node:24-alpine \
   npm ci --no-audit --no-fund
 
 # 前端类型检查 + Vite 构建
-docker run --rm -v "$PWD:/src" -w /src/frontend node:20-alpine \
+docker run --rm -v "$PWD:/src" -w /src/frontend node:24-alpine \
   npm run build
 ```
 
 完整验证仅在宣布完成前执行一次；只重跑失败项，不重复已通过且代码未变化的命令：
 
 ```bash
-docker run --rm -v "$PWD:/src" -w /src golang:1.22-alpine go test ./...
-docker run --rm -v "$PWD:/src" -w /src golang:1.22-alpine go vet ./...
-docker run --rm -v "$PWD:/src" -w /src golang:1.22-alpine \
+docker run --rm -v "$PWD:/src" -w /src golang:1.27-alpine go test ./...
+docker run --rm -v "$PWD:/src" -w /src golang:1.27-alpine go vet ./...
+docker run --rm -v "$PWD:/src" -w /src golang:1.27-alpine \
   go run ./cmd/modulegen --check
-docker run --rm -v "$PWD:/src" -w /src/frontend node:20-alpine npm run build
+docker run --rm -v "$PWD:/src" -w /src/frontend node:24-alpine npm run build
 ```
 
 集成与浏览器测试约束：

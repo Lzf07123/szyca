@@ -32,6 +32,39 @@ func (s *Server) handleAdminSite(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, public)
 }
 
+func (s *Server) handleAdminContentPage(w http.ResponseWriter, r *http.Request) {
+	page, err := s.site.AdminPage(r.Context(), r.PathValue("slug"))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if page == nil {
+		writeErrCode(w, http.StatusNotFound, "内容页面不存在", "not_found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"page": page})
+}
+
+func (s *Server) handleAdminSaveContentPage(w http.ResponseWriter, r *http.Request) {
+	var update site.PageUpdate
+	if err := readJSON(r, &update); err != nil {
+		writeErr(w, http.StatusBadRequest, "请求体格式错误")
+		return
+	}
+	principal := principalFromRequest(r)
+	page, err := s.site.SavePage(
+		r.Context(),
+		r.PathValue("slug"),
+		principal.ID,
+		&update,
+	)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"page": page})
+}
+
 func (s *Server) handleAdminSections(w http.ResponseWriter, r *http.Request) {
 	sections, err := s.site.AdminSections(r.Context())
 	if err != nil {

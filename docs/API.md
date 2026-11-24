@@ -86,6 +86,7 @@
 ### GET `/api/content/pages/{slug}`
 
 返回已发布页面；不存在或尚未发布返回 404。
+当前页脚“关于协会”入口使用 `slug=about`，正文按纯文本展示，不解释 HTML。
 
 ### GET `/api/config`
 
@@ -267,6 +268,8 @@
 | 方法 | 路径 | 权限 |
 |---|---|---|
 | GET | `/api/admin/site` | `site.read` |
+| GET | `/api/admin/content/pages/{slug}` | `site.read` |
+| PUT | `/api/admin/content/pages/{slug}` | `site.write`，body：`title / summary / body / status` |
 | GET | `/api/admin/site/sections` | `site.read` |
 | GET | `/api/admin/site/section-plugins` | `site.read` |
 | PUT | `/api/admin/site/sections` | `site.write` |
@@ -279,6 +282,8 @@
 | PUT | `/api/admin/platform/features` | 按模块 `feature_write_capability` 检查权限 |
 | GET | `/api/admin/media` | `media.read` |
 | DELETE | `/api/admin/media/{id}` | `media.write`，存在引用时返回 409 |
+
+内容页 `status` 只允许 `draft / published / archived`。只有已发布页面会进入公开接口并显示页脚“关于协会”入口；`body` 为纯文本，最多 20000 字符。
 
 首页 Section 使用一次事务保存新增、修改和删除：
 

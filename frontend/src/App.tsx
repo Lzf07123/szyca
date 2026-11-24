@@ -28,6 +28,7 @@ import {
 } from './modules/registry'
 
 const Home = lazy(() => import('./pages/Home'))
+const About = lazy(() => import('./pages/About'))
 const Admin = lazy(() => import('./pages/Admin'))
 
 function PageLoading() {
@@ -227,6 +228,7 @@ export const router = createBrowserRouter([
     errorElement: <RouteError />,
     children: [
       { index: true, element: <Home /> },
+      { path: 'about', element: <About /> },
       ...APP_MODULE_ROUTES.map(({ module, route }) => ({
         path: route.path.replace(/^\//, ''),
         element: <ModuleRoute module={module} route={route} />,
