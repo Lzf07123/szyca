@@ -2,7 +2,7 @@
  * szyca · Digital Deep Space template v1.0.6
  * Project-owned visual layer; no Li&Design submodule dependency.
  * Generated snapshot from frontend/src/cosmos.css
- * source-sha256: 3569fbfa71e38795e5ed25e3f9f314d50f78f11ebab3ea6ad04c24fa651311e9
+ * source-sha256: 2ab47740ad3275e726cb95559dd6cfe2226a18c0ffa75e246013225885e9c717
  * Do not edit directly. Run scripts/export_design_template.py --write.
  */
 /* ================================================================
@@ -3584,6 +3584,12 @@ input[type="file"]::file-selector-button {
 .about-page-form > .field {
   min-width: 0;
   margin-bottom: 0;
+}
+
+.about-page-form > .field > input,
+.about-page-form > .field > select {
+  height: 48px;
+  margin-top: 6px;
 }
 
 .about-page-form > .form-grid-full {

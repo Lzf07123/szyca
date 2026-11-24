@@ -3579,6 +3579,12 @@ input[type="file"]::file-selector-button {
   margin-bottom: 0;
 }
 
+.about-page-form > .field > input,
+.about-page-form > .field > select {
+  height: 48px;
+  margin-top: 6px;
+}
+
 .about-page-form > .form-grid-full {
   grid-column: 1 / -1;
 }
