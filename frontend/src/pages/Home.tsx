@@ -155,7 +155,7 @@ export default function Home() {
     <>
       <CustomCursor />
       <PageMeta
-        title={site.brand.title || `${site.brand.name} · 数字深空`}
+        title={site.brand.name || '计算机协会'}
         description={site.brand.description}
       />
       <div className="site-home cosmic-home">
