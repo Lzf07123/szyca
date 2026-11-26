@@ -1,6 +1,8 @@
 import type { HomeSection, SiteData } from './api/site'
 import { MODULE_CATALOG } from './generated/catalog.generated'
 
+export const DEFAULT_BRAND_LOGO_URL = '/media/szyca-logo.webp'
+
 // Brand copy and the static fallback live in one place. Runtime values returned
 // by /api/site override these defaults without requiring a rebuild.
 const fallbackCoreSections: HomeSection[] = [
@@ -120,7 +122,7 @@ export const FALLBACK_SITE: SiteData = {
     short_name: 'szyca',
     description: '汕头职业技术学院计算机协会：学习、协作与创造。',
     title: '计算机协会 · 官网',
-    logo_url: '',
+    logo_url: DEFAULT_BRAND_LOGO_URL,
   },
   nav: fallbackNavigation(),
   footer: {

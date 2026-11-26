@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="frontend/public/favicon.svg" width="88" alt="szyca logo" />
+  <img src="frontend/public/media/szyca-logo.webp" width="88" alt="szyca logo" />
 </p>
 
 <h1 align="center">szyca</h1>

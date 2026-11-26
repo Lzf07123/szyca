@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { FALLBACK_SITE } from '../brand'
+import { DEFAULT_BRAND_LOGO_URL, FALLBACK_SITE } from '../brand'
 import { api } from './client'
 
 export interface Brand {
@@ -181,9 +181,16 @@ export function SiteProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     try {
       const next = await api<SiteData>('/api/site')
-      setSite(next)
+      const loaded = {
+        ...next,
+        brand: {
+          ...next.brand,
+          logo_url: next.brand.logo_url || DEFAULT_BRAND_LOGO_URL,
+        },
+      }
+      setSite(loaded)
       setError('')
-      setFavicon(next.brand.logo_url)
+      setFavicon(loaded.brand.logo_url)
     } catch (cause) {
       setError((cause as Error).message)
     } finally {
