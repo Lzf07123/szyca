@@ -1,221 +1,285 @@
-# szyca
+<p align="center">
+  <img src="frontend/public/favicon.svg" width="88" alt="szyca logo" />
+</p>
 
-汕头职业技术学院计算机协会官网与招新答题系统：以「数字深空 · 代码即美学」为统一视觉语言，提供数据驱动首页、90 节点引力粒子背景、现场高并发答题、实时计分、全量排行榜、大屏、加入我们、精细后台与集成抽奖。
-技术栈：Go 1.27 + gorilla/websocket + Redis + PostgreSQL + React 18 (Vite 8) + Nginx。
-生产环境合并为**单镜像、单容器、单数据卷**；低配机器只拉取预构建镜像，不需要本地编译。
+<h1 align="center">szyca</h1>
 
-> 架构见 [docs/架构与模块.md](docs/架构与模块.md)，接口见 [docs/API.md](docs/API.md)
->
-> Section 插件开发契约见 [docs/Section插件开发.md](docs/Section插件开发.md)
->
-> 权威模块开发契约见 [docs/模块开发契约.md](docs/模块开发契约.md)
->
-> 生成器、运行时和注册表实现见 [docs/模块系统实现.md](docs/模块系统实现.md)
->
-> 后台操作见 [docs/后台操作手册.md](docs/后台操作手册.md)，部署/回滚见 [docs/部署与回滚.md](docs/部署与回滚.md)
->
-> 实施基线与验收取证见 [docs/官网重构与抽奖任务书.md](docs/官网重构与抽奖任务书.md)
+<p align="center">
+  <strong>汕头职业技术学院计算机协会官网与招新答题系统</strong>
+</p>
 
-## 功能一览
+<p align="center">
+  <a href="deploy/Dockerfile"><img src="https://img.shields.io/badge/Go%20build-1.27-00ADD8?logo=go&amp;logoColor=white" alt="Go 1.27 build image" /></a>
+  <a href="frontend/package.json"><img src="https://img.shields.io/badge/React-18-61DAFB?logo=react&amp;logoColor=061A2B" alt="React 18" /></a>
+  <a href="deploy/Dockerfile"><img src="https://img.shields.io/badge/Deploy-single%20container-2496ED?logo=docker&amp;logoColor=white" alt="Single container deployment" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Lzf07123/szyca" alt="MIT License" /></a>
+</p>
 
-- **数据驱动官网**：单次 `/api/site` 获取品牌、导航、页脚、模块开关、Section 插件实例、背景和二维码；同一类型可重复编排，公开站共享 56px 网格、90 节点 Canvas 星座、终端语言和模块卡片布局
-- **活动影像**：独立图集数据与专用上传/说明/排序/删除接口，文件接入媒体引用与删除保护，公开端随 `/api/site` 一次返回
-- **功能模块边界**：站壳只负责布局、首页、后台与模块组合；六个业务模块拥有自己的页面、handler、service/repository、迁移和权限，生成器只负责编译期注册
-- **在线答题**：一人一设备一身份；难度自选（全部/容易/简单/困难）；每轮题目顺序持久化；只能按当前题序每题提交一次；正确选项不下发前端；服务端按截止时间校验，网络抖动可配置宽限
-- **排行榜**：按最佳一轮总分优先、同分按用时排序；全量排名（未答题也排）、大屏最多显示 99 名、头部显示「我的排名」、参与/答题/在线连接统计
-- **身份规则**：设备指纹去重（同设备换昵称需先放弃）；放弃身份需二次确认并告知副作用；放弃后昵称永久封存、榜单留痕；可多轮答题取历史最佳成绩
-- **后台 2.0**：owner / content_editor / event_operator / data_viewer 固定角色；HttpOnly + SameSite 会话、CSRF、Origin 校验、登录限流和全量写操作审计；菜单按权限生成，接口仍有服务端授权
-- **集成抽奖**：号码开奖大屏与个人抽取双模式；后台配置连续号码范围、中奖等级和每级人数，逐级 CSPRNG 开奖并实时推送；旧答题后个人抽取、资格门槛、领取核销与 CSV 继续保留
-- **迁移与媒体**：版本化 SQL、PostgreSQL advisory lock、事务迁移与校验和；媒体台账记录引用关系，被引用文件禁止直接删除
+<p align="center">
+  <a href="#核心能力">核心能力</a>
+  ·
+  <a href="#快速开始">快速开始</a>
+  ·
+  <a href="#架构概览">架构</a>
+  ·
+  <a href="#开发与验证">开发</a>
+  ·
+  <a href="#运维要点">部署</a>
+  ·
+  <a href="#文档索引">文档</a>
+</p>
 
-## 快速开始（低配机器：直接拉取镜像）
+项目以「数字深空 · 代码即美学」为视觉语言，覆盖数据驱动首页、现场答题、实时排行榜、大屏、抽奖、加入方式、活动图集与权限化后台。
+
+技术上采用 **Go 1.27 + PostgreSQL + Redis + React 18 + Vite 8 + Nginx**。生产形态固定为**单镜像、单容器、单数据卷**，PostgreSQL、Redis、Go 和 Nginx 均由同一容器管理。
+
+## 文档索引
+
+| 文档 | 内容 |
+|---|---|
+| [架构与模块](docs/架构与模块.md) | 运行形态、模块边界、生命周期与请求链路 |
+| [模块开发契约](docs/模块开发契约.md) | 新增或修改模块的权威规则 |
+| [Section 插件开发](docs/Section插件开发.md) | 首页 Section 的 Manifest、配置与版本迁移 |
+| [API](docs/API.md) | 公开接口、后台接口、错误码与关键约束 |
+| [后台操作手册](docs/后台操作手册.md) | 管理员日常操作 |
+| [部署与回滚](docs/部署与回滚.md) | 生产配置、备份、迁移、发布和回滚 |
+| [验收报告](docs/验收报告.md) | 功能、安全、迁移与浏览器验收记录 |
+
+## 核心能力
+
+- **数据驱动站点**：`/api/site` 一次返回品牌、导航、页脚、功能开关、首页 Section、背景和二维码；首页同一 Section 类型支持多实例编排。
+- **在线答题**：一人一设备一身份，服务端持久化题序与截止时间，正确答案不下发，提交使用 `request_id` 幂等。
+- **实时排行与大屏**：按最佳成绩与用时排序，WebSocket 推送排行、公告、特效和号码开奖状态。
+- **现场抽奖**：支持号码大屏逐级开奖和个人抽取；使用 CSPRNG 加权抽取，库存、记录与幂等约束在事务内完成。
+- **后台安全**：固定角色权限、HttpOnly/SameSite 会话、Origin 与 CSRF 校验、登录限流及后台写操作审计。
+- **内容与媒体**：页面、二维码、背景、Logo、页脚、活动图集均可在后台维护；媒体引用检查阻止误删。
+- **可验证交付**：版本化 SQL 迁移、迁移校验和、定向测试、隔离集成测试和 Playwright 浏览器验收。
+
+## 架构概览
+
+```text
+访客浏览器
+    │ HTTP / WebSocket :8080
+    ▼
+容器内 Nginx
+    ├─ React 静态资源
+    ├─ /api ──────────────► Go :8081
+    └─ /ws  ──────────────► Go :8081
+                              ├─ PostgreSQL :5432（容器回环）
+                              └─ Redis :6379（容器回环）
+
+持久化卷 szyca_data
+    ├─ PostgreSQL 数据
+    ├─ Redis AOF
+    └─ 上传文件
+```
+
+模块在构建期合并进同一个 Go 二进制和 React 产物，不支持运行期下载、热插拔或远程脚本。
+
+### 业务模块
+
+| 模块 | 职责 | 依赖 |
+|---|---|---|
+| `quiz` | 身份、题库、轮次、作答、成绩、排行数据 | 无 |
+| `lottery` | 号码开奖、个人抽奖、奖品、库存与领取 | `quiz` |
+| `screen` | 排行榜 API 与现场大屏 | `quiz`、`realtime` |
+| `realtime` | WebSocket、公告、特效 | `quiz` |
+| `join` | 加入页面与二维码 | 无 |
+| `gallery` | 活动图集及 Section 编辑器 | 无 |
+
+`modules/<key>/module.json` 是模块元数据的事实源。修改 Manifest、迁移、模块入口或模块样式后，必须重新生成注册产物；不要手工编辑 `*.generated.*` 文件。
+
+## 快速开始
+
+### 前置条件
+
+- Docker Engine 与 Docker Compose v2。
+- 至少 1 GB 可用内存。
+- 生产环境需准备域名、TLS 终止和外部反向代理。
+
+### 使用预构建镜像
+
+在仓库根目录执行：
 
 ```bash
 cp .env.example .env
-# 编辑 .env：SZYCA_IMAGE_REGISTRY + SZYCA_IMAGE 指向远程仓库，修改 ADMIN_PASSWORD
-docker compose -f deploy/docker-compose.yml pull
-docker compose -f deploy/docker-compose.yml up -d
 ```
 
-低配机器运行期只需要镜像 `szyca:latest` 和容器 `szyca`，不会拉取 PostgreSQL、Redis、Nginx 或 Node/Go 基础镜像；这些组件已内置。建议至少 1 GB 内存，生产库存放于 `szyca_data` 单卷。
+编辑 `.env`，至少完成以下配置：
 
-| 入口 | 说明 |
-|---|---|
-| http://localhost:8080 | 首页 |
-| /quiz | 答题 |
-| /result | 个人成绩 |
-| /screen | 排行榜大屏（投屏） |
-| /lottery | 号码开奖大屏（默认关闭） |
-| /lottery/participate | 答题后个人抽取（默认关闭） |
-| /admin | 后台管理（首次 owner 见 .env） |
-| /healthz | 健康检查 |
-
-停止：`docker compose -f deploy/docker-compose.yml down`（加 `-v` 清空数据库与上传文件）。
-
-开发机本地构建使用 build override：
-
-```bash
-docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.build.yml up -d --build
-```
-
-## 环境变量（.env，不入库；模板见 .env.example）
-
-| 变量 | 默认 | 说明 |
-|---|---|---|
-| `ADMIN_USERNAME` | owner | 首次启动自动创建的 owner 用户名 |
-| `ADMIN_PASSWORD` | admin123 | 首次启动创建 owner 的初始密码（务必修改） |
-| `ADMIN_COOKIE_SECURE` | false | 后台 Cookie 是否仅 HTTPS 发送；生产必须为 `true` |
-| `ADMIN_SESSION_HOURS` | 8 | 后台会话时长 |
-| `LEGACY_ADMIN_TOKEN_ENABLED` | false | 旧单口令迁移窗口开关，完成切换后保持关闭 |
-| `POSTGRES_PASSWORD` | szyca | 单容器内 PostgreSQL 口令（生产务必修改） |
-
-`ADMIN_COOKIE_SECURE=true` 即启用生产保护：默认管理员口令、默认数据库口令或旧口令开关未关闭时，容器会拒绝启动。
-| `QUESTION_SECONDS` | 20 | 每题倒计时（秒） |
-| `ANSWER_GRACE_SECONDS` | 20 | 网络抖动/断线补交宽限（秒）；截止时间本身仍以服务端记录为准 |
-| `QUESTION_COUNT` | 10 | 每轮抽题数 |
-| `WEB_PORT` | 8080 | 对外端口 |
-| `WS_ALLOWED_ORIGINS` | （空） | 额外允许的 WebSocket Origin，逗号分隔；同源与本机开发默认允许 |
-| `SZYCA_IMAGE_REGISTRY` | （空） | 应用镜像仓库前缀，需以 `/` 结尾；独立于构建基础镜像 |
-| `SZYCA_IMAGE` | szyca:latest | 远程应用镜像名与 tag |
-| `SZYCA_PULL_POLICY` | missing | Compose 拉取策略；低配机可设 `always` |
-
-### 远程镜像与本地构建
-
-| 变量 | 默认 | 作用 |
-|---|---|---|
-| `SZYCA_IMAGE_REGISTRY` | （空） | 最终应用镜像 registry 前缀，与 `SZYCA_IMAGE` 拼接 |
-| `BASE_IMAGE_REGISTRY` | （空） | 仅开发构建时替换 golang/node/alpine 基础镜像前缀 |
-| `SOURCE_MIRROR` | （空） | 软件源统一开关：空=官方源；`cn`=国内镜像组合（Go 走 goproxy.cn、npm 走 npmmirror、apk 走阿里云） |
-
-示例：远程私有仓库
-
-```bash
+```dotenv
+ADMIN_PASSWORD=<首次启动使用的强口令>
+POSTGRES_PASSWORD=<数据库强口令>
 SZYCA_IMAGE_REGISTRY=registry.example.com/
 SZYCA_IMAGE=szyca:latest
 SZYCA_PULL_POLICY=always
 ```
 
-构建并推送镜像：
+`SZYCA_IMAGE_REGISTRY` 必须以 `/` 结尾；最终镜像地址为两者直接拼接。若镜像位于本机，可不设置 registry，并将拉取策略设为 `missing`。
+
+随后启动：
 
 ```bash
-scripts/publish_image.sh          # 构建前可设置 BASE_IMAGE_REGISTRY / SOURCE_MIRROR=cn
-scripts/publish_image.sh --push
+docker compose -f deploy/docker-compose.yml pull
+docker compose -f deploy/docker-compose.yml up -d
+docker compose -f deploy/docker-compose.yml ps
 ```
 
-页脚/备案/二维码/背景图/站点 Logo 等运行期内容一律在后台配置，数据库与上传文件统一持久化在 `data` 单卷。
+服务就绪后可访问：
 
-## 后台使用速查
+| 地址 | 用途 |
+|---|---|
+| `http://localhost:8080/` | 首页 |
+| `/about` | 关于协会 |
+| `/quiz`、`/result` | 答题与个人成绩 |
+| `/screen` | 实时排行榜大屏 |
+| `/lottery` | 号码抽奖大屏 |
+| `/lottery/participate` | 答题后的个人抽奖 |
+| `/join` | 加入方式 |
+| `/admin` | 后台管理 |
+| `/healthz`、`/readyz` | 存活与就绪检查 |
 
-1. 访问 `/admin`，输入 `ADMIN_USERNAME` 与 `ADMIN_PASSWORD` 创建的管理员账号
-2. **概览**：单一“下一项操作”焦点、四项紧凑指标；图表、运行状态和终端日志默认折叠、按需展开
-3. **答题控制**：开始/结束答题、特效广播、公告广播、二维码管理、成绩导出
-4. **题库**：**批量导入**（下载模板，列：题目,选项A~F,正确答案(A-F),难度,分值；「示例」开头行自动跳过）、新增题目、启用/停用
-5. **站点内容**：模块总开关、Section 新增/删除/排序/启停、草稿/发布、定时上下线、标题/正文/CTA 配置
-6. **抽奖**：总开关、号码大屏/个人抽取独立模式、号码场次逐级开奖、历史导出，以及个人活动、库存、领取核销
-7. **媒体与外观**：Logo、页脚、背景和媒体引用台账
-8. **管理员/审计**：创建角色账号、停用即时踢线、按管理员/资源/请求 ID 查询审计
+页面是否公开由后台功能开关和 Section 配置决定。
 
-## 关键 API（全部 JSON；后台接口使用 HttpOnly Cookie + CSRF）
+### 本地构建
 
-| 方法 | 路径 | 说明 |
+开发机从源码构建并启动：
+
+```bash
+docker compose \
+  -f deploy/docker-compose.yml \
+  -f deploy/docker-compose.build.yml \
+  up -d --build
+```
+
+源码通过构建阶段写入镜像，不会热更新到运行中的容器。修改代码后需要重新构建；执行前应确认不会覆盖生产数据。
+
+停止服务：
+
+```bash
+docker compose -f deploy/docker-compose.yml down
+```
+
+普通 `down` 会保留 `szyca_data`。`down -v` 会删除数据库、Redis 和上传文件，只能在已确认的隔离环境或已有可恢复备份时使用。
+
+## 配置
+
+`.env` 不入库，完整模板见 [.env.example](.env.example)。
+
+| 变量 | 默认值 | 说明 |
 |---|---|---|
-| POST | /api/session | 昵称+设备指纹 → 身份（同设备同昵称自动恢复） |
-| GET | /api/site | 公共站点单一配置契约（支持 ETag） |
-| GET | /api/content/pages/{slug} | 已发布内容页 |
-| POST | /api/quiz/round | 开始一轮（body: difficulty 可选） |
-| GET | /api/quiz/current | 恢复进行中的一轮，返回持久化题序与本题截止时间 |
-| POST | /api/answer | 提交当前题（request_id 幂等；该轮该题只能计分一次） |
-| GET | /api/me | 我的最佳成绩与全量排名 |
-| GET | /api/rank?top=99 | 排行榜 |
-| GET | /api/stats | 参与人数/累计答题/启用题目数/在线连接数 |
-| GET | /api/runtime | 系统运行时长（秒）与启动时间（公开只读） |
-| GET | /api/backgrounds · /api/qrcode · /api/config | 前台资源 |
-| GET | /ws?token=… | WebSocket 实时推送（匿名=大屏） |
-| POST | /api/identity/abandon | 放弃身份（需本机 device_fp 归属校验） |
-| GET | /api/lottery/campaign | 当前抽奖活动和用户可见状态 |
-| GET | /api/lottery/board | 当前号码开奖场次、等级与中奖号码 |
-| POST | /api/lottery/draw | 带用户 token 与 request_id 抽取 |
-| GET | /api/lottery/me | 当前用户抽奖和领取状态 |
-| POST | /api/admin/auth/login | 管理员登录，设置 HttpOnly/SameSite Cookie 并返回 CSRF token |
-| GET* | /api/admin/auth/me | 当前管理员、角色和权限；刷新 CSRF token |
-| GET* | /api/admin/overview | 系统概览 |
-| GET* | /api/admin/site/section-plugins | 首页 Section 插件 Manifest |
-| GET* | /api/admin/export/scores | 导出成绩 CSV |
-| POST* | /api/admin/questions/import | 批量导入题目 CSV |
-| GET* | /api/admin/questions/template | 下载导入模板 |
-| POST* | /api/admin/{quiz-state,announce,effect,uploads,footer,…} | 后台操作 |
-| GET*/POST* | /api/admin/logo | 站点 Logo（读取/保存，空值=恢复内置样式） |
-| GET*/POST*/DELETE* | /api/admin/qrcodes[/{id}] | 二维码列表 / 新增 / 改标题与换图 / 启停 / 删除 |
+| `WEB_PORT` | `8080` | 宿主机对外端口 |
+| `ADMIN_USERNAME` | `owner` | 首次启动创建的 owner 用户名 |
+| `ADMIN_PASSWORD` | `admin123` | 首次创建 owner 的口令，至少 8 个字符；已有账号不会在重启时被覆盖 |
+| `ADMIN_COOKIE_SECURE` | `false` | 后台 Cookie 仅通过 HTTPS 发送；生产必须为 `true` |
+| `ADMIN_SESSION_HOURS` | `8` | 后台会话有效时长 |
+| `LEGACY_ADMIN_TOKEN_ENABLED` | `false` | 旧单口令迁移窗口；完成切换后必须关闭 |
+| `POSTGRES_PASSWORD` | `szyca` | PostgreSQL 口令；首次初始化数据卷后，修改前需同步处理现有数据库 |
+| `QUESTION_SECONDS` | `20` | 每题服务端作答时限，单位秒 |
+| `ANSWER_GRACE_SECONDS` | `20` | 断线补交宽限，单位秒 |
+| `QUESTION_COUNT` | `10` | 每轮抽题数 |
+| `PG_POOL_MAX` | `20` | PostgreSQL 连接池上限 |
+| `TRUSTED_PROXY_CIDRS` | `127.0.0.1/32,::1/128` | 允许透传来源地址的代理网段，逗号分隔 |
+| `WS_ALLOWED_ORIGINS` | 空 | 同源之外的 WebSocket Origin 白名单，逗号分隔 |
+| `SZYCA_IMAGE_REGISTRY` | 空 | 预构建应用镜像仓库前缀，需以 `/` 结尾 |
+| `SZYCA_IMAGE` | `szyca:latest` | 应用镜像名与 tag |
+| `SZYCA_PULL_POLICY` | `missing` | Compose 镜像拉取策略；固定发布可使用 `always` |
+| `BASE_IMAGE_REGISTRY` | 空 | 仅开发构建使用的 Go/Node/Alpine 基础镜像前缀 |
+| `SOURCE_MIRROR` | 空 | 仅开发构建使用；设为 `cn` 时启用国内软件源 |
+
+生产保护规则：当 `ADMIN_COOKIE_SECURE=true` 时，默认管理员口令、默认数据库口令或未关闭的旧口令入口都会使容器拒绝启动。
+
+后台内容、功能开关、首页 Section、二维码、背景、Logo 和页脚保存在数据库或上传目录中，不要通过修改源码代替后台配置。
 
 ## 目录结构
 
-```
-backend/              Go 共享内核（contract/site/access/audit/media/platform/store/httpapi）
-modules/              六个业务模块的 Manifest、后端服务、前端页面和测试
-frontend/             React 18 + Vite 站壳、共享组件与 Section 运行时
-deploy/               单容器 Dockerfile + Compose + Nginx/Supervisor
-design-system/szyca/  BRAND + MASTER + 页面规则 + 项目自有深空模板
-docs/                 架构、API、后台、部署回滚与验收证据
-tests/browser/        Playwright + axe Docker 验收
-artifacts/            本地验收截图与报告（可再生成，不跟踪）
+```text
+backend/
+  cmd/server/          Go 服务入口
+  contract/            跨层公共契约
+  core/                HTTP、权限、审计、媒体、站点、迁移和模块运行时
+modules/               六个业务模块及其 Manifest、迁移、前端和测试
+frontend/              React 站壳、共享组件、Section runtime 和 API 客户端
+cmd/modulegen/         Manifest 与迁移注册生成器
+deploy/                Dockerfile、Compose、Nginx、Supervisor 和入口脚本
+design-system/szyca/   项目自有深空品牌与模板快照
+docs/                  架构、API、开发、运维和验收文档
+scripts/               集成、迁移、备份恢复、模板检查与发布脚本
+loadtest/              k6 压测场景
+tests/browser/         Playwright + axe 浏览器验收
 ```
 
-## 项目设计模板
+## 开发与验证
 
-`szyca` 的深空视觉独立于 `Li&Design` 子模块，模板版本、权威来源和哈希保存在 `design-system/szyca/template/manifest.json`。
+所有编译、生成和测试命令都在挂载源码的容器内执行，不依赖宿主机 Go、Node 或 Python 工具链。当前运行中的 `szyca` 服务只挂载数据卷，不挂载源码。
+
+### 常用检查
 
 ```bash
-python3 scripts/export_design_template.py --write
-python3 scripts/export_design_template.py --check
+# 单个 Go 包
+docker run --rm -v "$PWD:/src" -w /src golang:1.27-alpine \
+  go test ./modules/quiz/backend
+
+# 前端类型检查与生产构建
+# 首次使用或 package-lock.json 变更后，先执行 npm ci
+docker run --rm -v "$PWD:/src" -w /src/frontend node:24-alpine \
+  npm run build
+
+# Manifest、迁移或模块入口变更
+docker run --rm -v "$PWD:/src" -w /src golang:1.27-alpine \
+  go run ./cmd/modulegen --write
+docker run --rm -v "$PWD:/src" -w /src golang:1.27-alpine \
+  go run ./cmd/modulegen --check
+
+# 共享视觉令牌变更
+docker run --rm -v "$PWD:/src" -w /src python:3.12-alpine \
+  python3 scripts/export_design_template.py --check
 ```
 
-修改 `frontend/src/index.css` 或 `frontend/src/cosmos.css` 后必须重新导出模板；`--check` 会阻止快照漂移和 `Li&Design` 子模块依赖回流。
-
-## 云端部署要点
-
-- 已备案域名 + 外部反向代理：TLS 在外部反代终止，容器内 Nginx 只走 HTTP；**外部代理仍需透传 WebSocket Upgrade 头**（见 docs §8-§9）
-- 前端构建产物建议发布到 OSS+CDN（现场"进门一分钟"静态流量集中）
-- 上线前：`.env` 改强口令并设 `ADMIN_COOKIE_SECURE=true` → owner 登录 → 配置站点/抽奖 → 压测 → 现场演练
-- 单容器只暴露 8080；PostgreSQL/Redis 仅监听容器回环地址。备份时复制 `szyca_data` 卷即可同时保存数据库、Redis AOF 和上传文件。
-
-## 压测（k6）
+依赖安装示例：
 
 ```bash
-# 隔离环境（独立端口与数据卷，不污染正式数据）
-WEB_PORT=8081 ADMIN_PASSWORD=loadtest docker compose -p stpt-loadtest \
-  -f deploy/docker-compose.yml -f deploy/docker-compose.build.yml up -d --build
-# 在 http://localhost:8081/admin 用 owner/loadtest 登录并开始答题
-# 运行（400 VU：150 答题全流程 + 200 排行轮询 + 50 WebSocket）
-docker run --rm -i --network stpt-loadtest_default \
-  -v "$PWD/artifacts/loadtest:/out" \
-  -e BASE_URL=http://szyca:8080 \
-  -e SUMMARY_PATH=/out/k6-summary.json \
-  grafana/k6 run - < loadtest/k6-loadtest.js
-docker compose -p stpt-loadtest -f deploy/docker-compose.yml down -v
+docker run --rm -v "$PWD:/src" -w /src/frontend node:24-alpine \
+  npm ci --no-audit --no-fund
 ```
 
-> 注：本机 macOS Docker Desktop 桥接网络对并发吞吐有额外开销；生产 Linux 服务器 + 外部反代网络下指标更优。排行榜主通道为 WS 推送（500ms 节流），轮询仅兜底。
+项目没有 ESLint、Prettier、golangci-lint 或 CI 配置，不要虚构这些命令。
 
-## 开发调试
+### 修改模块
 
-- 前端热更：`cd frontend && npm run dev`（默认代理到 :8080；对接其他预览栈时可设置 `VITE_DEV_PROXY=http://localhost:8092`）
-- 改代码后：`docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.build.yml up -d --build`
-- 查看日志：`docker logs -f szyca`
+1. 阅读对应 `module.json`、后端路由/service/repository、前端入口和 `tests/browser.mjs`。
+2. 先明确模块所有权，跨模块协作使用 `backend/contract` 或已声明的窄接口。
+3. 同时检查 Manifest、实际路由、权限、前端入口、测试和必要文档是否一致。
+4. Manifest、迁移或模块样式变化后运行 `modulegen --write`，再运行 `modulegen --check`。
+5. 只运行与改动直接相关的包测试或前端构建；任务收尾再运行完整验证。
 
-## 自动化回归（Docker 隔离栈）
+### 完整验证
+
+宣布交付前执行一次：
+
+```bash
+docker run --rm -v "$PWD:/src" -w /src golang:1.27-alpine go test ./...
+docker run --rm -v "$PWD:/src" -w /src golang:1.27-alpine go vet ./...
+docker run --rm -v "$PWD:/src" -w /src golang:1.27-alpine \
+  go run ./cmd/modulegen --check
+docker run --rm -v "$PWD:/src" -w /src/frontend node:24-alpine \
+  npm run build
+```
+
+失败后只重跑失败项。同一命令连续失败两次时，应先分析执行位置、依赖和失败原因，不要机械重跑。
+
+### 隔离集成测试
+
+集成脚本默认访问 `http://localhost:8091`，并共享同一套测试状态，必须按以下顺序执行：
 
 ```bash
 WEB_PORT=8091 ADMIN_PASSWORD=integrity-test \
 QUESTION_SECONDS=5 ANSWER_GRACE_SECONDS=2 \
 docker compose -p stpt-integrity-test \
-  -f deploy/docker-compose.yml -f deploy/docker-compose.build.yml up -d --build
-python3 scripts/integration_test.py
-docker compose -p stpt-integrity-test -f deploy/docker-compose.yml down -v
-```
+  -f deploy/docker-compose.yml \
+  -f deploy/docker-compose.build.yml \
+  up -d --build
 
-以下脚本默认连接 `http://localhost:8091`，请按顺序运行；它们共享答题状态，不适合并发执行：
-
-```bash
 python3 scripts/integration_test.py
 python3 scripts/admin_access_test.py
 python3 scripts/site_media_test.py
@@ -225,67 +289,30 @@ python3 scripts/migration_test.py
 python3 scripts/site_perf_test.py
 ```
 
-覆盖题目脱敏、题序、幂等、服务端超时、排行榜/导出、并发注册、WS Origin、管理员登录限流、RBAC、CSRF、审计、站点 ETag/模块开关、媒体引用、抽奖资格、同用户并发、库存和领取，以及号码场次状态机、逐级开奖、并发重放和号码唯一性。后端单测：
+测试栈使用独立项目名和端口。结束并清理测试数据前，必须先确认 `stpt-integrity-test` 与实际运行服务无关。
 
-```bash
-docker run --rm -v "$PWD:/src" -w /src golang:1.27-alpine go test ./...
-```
+浏览器验收、迁移回归、备份恢复和压测命令见[部署与回滚手册](docs/部署与回滚.md)、[验收报告](docs/验收报告.md)与 [k6 场景](loadtest/k6-loadtest.js)。
 
-浏览器、无障碍、弱网降级与六档视口：
+## 运维要点
 
-```bash
-docker run --rm -v "$PWD:/workspace" -w /workspace/tests/browser \
-  mcr.microsoft.com/playwright:v1.56.0-noble npm ci --no-audit --no-fund
-docker run --rm --add-host=host.docker.internal:host-gateway \
-  -v "$PWD:/workspace" \
-  -v "$PWD/artifacts/browser:/artifacts/browser" \
-  -w /workspace/tests/browser \
-  -e BASE_URL=http://host.docker.internal:8091 \
-  -e ADMIN_PASSWORD=integrity-test \
-  mcr.microsoft.com/playwright:v1.56.0-noble node acceptance.mjs
-```
+- 数据全部存放在 `szyca_data` 单卷；升级或迁移前先完成整卷备份。
+- 容器只对外暴露 `8080`；PostgreSQL 与 Redis 只监听容器回环地址。
+- 外部反向代理必须透传 `Host`、`X-Forwarded-*` 以及 WebSocket `Upgrade`、`Connection` 头。
+- 健康检查使用 `/healthz` 和 `/readyz`；业务可用性还应检查 `/api/site`、答题写入和 WebSocket。
+- 发布前切换 `ADMIN_COOKIE_SECURE=true`、更换默认口令、关闭旧口令入口，并验证四种后台角色。
+- 迁移失败时保留日志和 `schema_migrations` 状态，先分析最后成功版本；禁止修改已应用迁移。
 
-旧库升级、整卷备份恢复与版本回滚演练：
+备份、恢复、发布顺序和镜像回滚以[部署与回滚手册](docs/部署与回滚.md)为准。
 
-```bash
-docker build -f deploy/Dockerfile -t szyca:release-test .
-python3 scripts/legacy_migration_test.py
-python3 scripts/rollback_test.py
-python3 scripts/bundle_baseline_test.py
-```
+## 参与贡献
 
-备份恢复脚本要求容器名 `szyca` 未被占用；它会创建、验证并清理两个明确命名的隔离测试栈：
+欢迎提交问题与改进：
 
-```bash
-python3 scripts/backup_restore_test.py
-```
-
-生产 Secure Cookie 标志：
-
-```bash
-TEST_IMAGE=szyca:release-test python3 scripts/secure_cookie_test.py
-```
-
-## 数据库迁移
-
-共享兼容迁移位于 `backend/core/platform/migrate/migrations/`；模块迁移位于
-`modules/<module-name>/backend/migrations/`。应用启动时：
-
-1. 获取 PostgreSQL advisory lock；
-2. 校验 `schema_migrations` 中已应用版本的 SHA-256；
-3. 将每个待执行迁移和版本记录放在同一事务中提交；
-4. 失败时回滚该版本并终止启动，不留下半迁移状态。
-
-旧库升级会先执行幂等的 `0001_quiz_baseline.sql`，保留用户、题目、作答、轮次、二维码、背景、页脚和 Logo 数据。
-
-模块清单变更后重新生成注册表并检查漂移：
-
-```bash
-docker run --rm -v "$PWD:/src" -w /src golang:1.27-alpine \
-  go run ./cmd/modulegen --write
-docker run --rm -v "$PWD:/src" -w /src golang:1.27-alpine sh -c \
-  'go run ./cmd/modulegen --check'
-```
+- 功能改动先阅读[模块开发契约](docs/模块开发契约.md)，保持 Manifest、路由、前端入口、权限、测试与生成文件一致。
+- 首页 Section 和公开 API 改动分别遵循 [Section 插件开发](docs/Section插件开发.md) 与 [API](docs/API.md)。
+- 不要手工编辑 `*.generated.*`，不要提交 `node_modules/`、构建产物、上传文件、日志或真实用户数据。
+- 提交前执行[完整验证](#完整验证)，并说明改动范围、验证命令和已知边界。
+- 安全问题不要携带真实密钥、管理员口令或用户数据进入公开 Issue。
 
 ## License
 
